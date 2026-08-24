@@ -92,9 +92,13 @@ Players.PlayerRemoving:Connect(function(player)
 	DataManager.unload(player)
 end)
 
+-- BindToClose: save only players still in cache (not yet unloaded by PlayerRemoving)
 game:BindToClose(function()
+	local saving = {}
 	for _, player in Players:GetPlayers() do
-		DataManager.save(player)
+		if cache[player.UserId] then
+			table.insert(saving, task.spawn(DataManager.save, player))
+		end
 	end
 end)
 
