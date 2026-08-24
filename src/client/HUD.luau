@@ -235,20 +235,17 @@ function HUD.create(player: Player): HUDInstance
 	local incomeLabel = makeLabel(topBar, "+$0/s", UDim2.new(0.4, 0, 0.35, 0), UDim2.new(0.3, 0, 0.60, 0), 13, false)
 	incomeLabel.TextColor3 = Color3.fromRGB(120, 255, 120)
 
-	-- Gear button (top-right of top bar)
-	local gearBtn = Instance.new("TextButton")
-	gearBtn.Size               = UDim2.new(0, 42, 0, 42)
-	gearBtn.Position           = UDim2.new(1, -52, 0, 7)
+	-- Gear button (floating top-right)
+	local gearBtn = Instance.new("ImageButton")
+	gearBtn.Size               = UDim2.new(0, 46, 0, 46)
+	gearBtn.Position           = UDim2.new(1, -60, 0, 10)
 	gearBtn.BackgroundColor3   = Color3.fromRGB(28, 34, 52)
-	gearBtn.BackgroundTransparency = 0.2
-	gearBtn.Text               = "⚙"
-	gearBtn.TextSize           = 26
-	gearBtn.Font               = Enum.Font.GothamBold
-	gearBtn.TextColor3         = Color3.fromRGB(190, 210, 245)
+	gearBtn.BackgroundTransparency = 0
+	gearBtn.Image              = "rbxassetid://17368089841" -- Reemplaza 0 con el ID de la imagen
 	gearBtn.AutoButtonColor    = true
 	gearBtn.BorderSizePixel    = 0
-	gearBtn.Parent             = topBar
-	addCorner(gearBtn, 10)
+	gearBtn.Parent             = screen
+	addCorner(gearBtn, 12)
 
 	-- ── Settings panel ──────────────────────────────────────────────────────────
 	local PANEL_W  = 338
@@ -377,7 +374,7 @@ function HUD.create(player: Player): HUDInstance
 			TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
 			{ Position = UDim2.new(1, PANEL_OPEN_X, 0, 64) }
 		):Play()
-		TweenService:Create(gearBtn, TweenInfo.new(0.2), { TextColor3 = Color3.fromRGB(80, 175, 255) }):Play()
+		TweenService:Create(gearBtn, TweenInfo.new(0.2), { ImageColor3 = Color3.fromRGB(150, 150, 150) }):Play()
 	end
 
 	local function closePanel()
@@ -393,7 +390,7 @@ function HUD.create(player: Player): HUDInstance
 				panel.Visible = false
 			end
 		end)
-		TweenService:Create(gearBtn, TweenInfo.new(0.2), { TextColor3 = Color3.fromRGB(190, 210, 245) }):Play()
+		TweenService:Create(gearBtn, TweenInfo.new(0.2), { ImageColor3 = Color3.fromRGB(255, 255, 255) }):Play()
 	end
 
 	gearBtn.MouseButton1Click:Connect(function()
