@@ -7,8 +7,11 @@ local IncomeService = require(script.IncomeService)
 local GameConfig = require(ReplicatedStorage.Shared.GameConfig)
 
 -- Create or retrieve RemoteEvents folder in ReplicatedStorage
-local remotes = ReplicatedStorage:FindFirstChild("Remotes") :: Folder
-if not remotes then
+local remotes: Folder
+local existingRemotes = ReplicatedStorage:FindFirstChild("Remotes")
+if existingRemotes and existingRemotes:IsA("Folder") then
+	remotes = existingRemotes
+else
 	remotes = Instance.new("Folder")
 	remotes.Name = "Remotes"
 	remotes.Parent = ReplicatedStorage
@@ -26,10 +29,10 @@ local function getOrCreateRemote(name: string): RemoteEvent
 end
 
 -- Server → Client: push full player state (inventory changes, initial load)
-local _updatePlayerData = getOrCreateRemote("UpdatePlayerData")
+getOrCreateRemote("UpdatePlayerData")
 
 -- Server → Client: lightweight tick update for coins & income/s
-local _updateCoins = getOrCreateRemote("UpdateCoins")
+getOrCreateRemote("UpdateCoins")
 
 -- Client → Server: open an egg
 local openEgg = getOrCreateRemote("OpenEgg")
@@ -63,7 +66,7 @@ local function rollRarity(): number
 
 	local roll = math.random() * totalWeight
 	local cumulative = 0
-	for id, w in GameConfig.EGG_WEIGHTS do
+	for id, w in ipairs(GameConfig.EGG_WEIGHTS) do
 		cumulative += w
 		if roll <= cumulative then
 			return id
@@ -76,6 +79,10 @@ local function rollEgg(): (string, number)
 	local rarityId = rollRarity()
 	local eligibleSpecies = GameConfig.getSpeciesForRarity(rarityId)
 
+	if #eligibleSpecies == 0 then
+		warn("[Server] No hay especies para rarityId=" .. rarityId .. ". Usando fallback Manzana.")
+		return "Manzana", 1
+	end
 	local selectedSpecies = eligibleSpecies[math.random(1, #eligibleSpecies)]
 	return selectedSpecies.name, rarityId
 end
@@ -130,7 +137,7 @@ placePlant.OnServerEvent:Connect(function(player: Player, inventoryIndex: any, s
 
 	-- Ensure target slot is empty
 	local currentSlot = data.plot[slotIndex]
-	if currentSlot and currentSlot ~= false then
+	if currentSlot and (currentSlot :: any) ~= false then
 		return
 	end
 
@@ -163,7 +170,7 @@ removePlant.OnServerEvent:Connect(function(player: Player, slotIndex: any)
 	end
 
 	local slot = data.plot[slotIndex]
-	if not slot or slot == false or type(slot) ~= "table" then
+	if not slot or (slot :: any) == false or type(slot) ~= "table" then
 		return
 	end
 
@@ -182,6 +189,9 @@ local function setupPlayer(player: Player)
 	end
 end
 
+-- Inicializar IncomeService ANTES de conectar PlayerAdded para evitar nil-access en pushUpdate
+IncomeService.init(remotes)
+
 Players.PlayerAdded:Connect(setupPlayer)
 
 Players.PlayerRemoving:Connect(function(player: Player)
@@ -191,7 +201,5 @@ end)
 for _, player in Players:GetPlayers() do
 	task.spawn(setupPlayer, player)
 end
-
-IncomeService.init(remotes)
 
 print("[Server] FruitGarden initialized with security and gacha fixes.")

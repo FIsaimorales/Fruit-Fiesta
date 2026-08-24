@@ -31,8 +31,11 @@ function NumberFormat.formatMoney(n: number): string
 	return "$" .. formatted .. SUFFIXES[i]
 end
 
--- formatPlain(1500) → "1,500"
+-- formatPlain(1500) → "1,500" | formatPlain(-1500) → "-1,500"
 function NumberFormat.formatPlain(n: number): string
+	if n < 0 then
+		return "-" .. NumberFormat.formatPlain(-n)
+	end
 	local s = tostring(math.floor(n))
 	local formatted = s:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
 	return formatted

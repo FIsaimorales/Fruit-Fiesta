@@ -109,7 +109,10 @@ function DataManager.save(player: Player): boolean
 
 	local key = "player_" .. player.UserId
 	local success, err = retryDataStore(3, 1, function()
-		store:SetAsync(key, data)
+		store:UpdateAsync(key, function(_oldData)
+			return data
+		end)
+		return nil
 	end)
 
 	if not success then
@@ -150,33 +153,40 @@ end)
 
 -- BindToClose: Esperar a que todos los guardados finalicen antes de que el servidor se apague
 game:BindToClose(function()
-	local pendingCount = 0
 	local playersToSave: { Player } = {}
 
 	for _, player in Players:GetPlayers() do
 		if cache[player.UserId] then
 			table.insert(playersToSave, player)
-			pendingCount += 1
 		end
 	end
 
-	if pendingCount == 0 then
+	if #playersToSave == 0 then
 		return
 	end
 
-	print(string.format("[DataManager] Servidor cerrándose: Guardando datos de %d jugadores...", pendingCount))
+	print(string.format("[DataManager] Servidor cerrándose: Guardando datos de %d jugadores...", #playersToSave))
 
+	-- Rastrear threads en lugar de contador compartido (evita race condition)
+	local threads: { thread } = {}
 	for _, player in playersToSave do
-		task.spawn(function()
+		table.insert(threads, task.spawn(function()
 			DataManager.save(player)
-			pendingCount -= 1
-		end)
+		end))
 	end
 
 	-- Esperar con timeout máximo de 25 segundos (Roblox corta a los 30s)
 	local startTime = os.clock()
-	while pendingCount > 0 and (os.clock() - startTime) < 25 do
-		task.wait(0.1)
+	while (os.clock() - startTime) < 25 do
+		local allDone = true
+		for _, thread in threads do
+			if coroutine.status(thread) ~= "dead" then
+				allDone = false
+				break
+			end
+		end
+		if allDone then break end
+		task.wait(0.05)
 	end
 
 	print("[DataManager] Guardado de cierre finalizado.")

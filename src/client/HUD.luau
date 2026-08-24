@@ -1,5 +1,5 @@
 --!strict
-local Players = game:GetService("Players")
+local _Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -228,7 +228,7 @@ function HUD.create(player: Player): HUDInstance
 	invPadding.Parent = invFrame
 
 	local inventoryButtons: { TextButton } = {}
-	local cachedPlotState: { Plant | boolean } = {}
+	local cachedPlotState: { [number]: Plant | boolean } = {}
 	local lastInventoryCount = -1
 
 	-- Helper to update coins label and egg button
@@ -268,48 +268,51 @@ function HUD.create(player: Player): HUDInstance
 		end
 
 		-- Rebuild inventory only when inventory changes (avoids constant GC churn)
-		for _, b in inventoryButtons do
-			b:Destroy()
-		end
-		table.clear(inventoryButtons)
-		lastInventoryCount = #data.plants
+		if #data.plants ~= lastInventoryCount then
+			for _, b in inventoryButtons do
+				b:Destroy()
+			end
+			table.clear(inventoryButtons)
+			lastInventoryCount = #data.plants
 
-		for idx, plant in data.plants do
-			local rarity = GameConfig.getRarity(plant.rarityId)
-			local income = GameConfig.getIncome(plant.speciesName, plant.rarityId)
+			for idx, plant in data.plants do
+				local rarity = GameConfig.getRarity(plant.rarityId)
+				local income = GameConfig.getIncome(plant.speciesName, plant.rarityId)
 
-			local invBtn = Instance.new("TextButton")
-			invBtn.Size = UDim2.new(1, 0, 0, 44)
-			invBtn.BackgroundColor3 = rarityColor(plant.rarityId)
-			invBtn.BackgroundTransparency = 0.25
-			invBtn.Text = string.format("%s (%s)\n+$%s/s", plant.speciesName, rarity and rarity.name or "?", NumberFormat.formatMoney(income):gsub("%$", ""))
-			invBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-			invBtn.Font = Enum.Font.GothamBold
-			invBtn.TextSize = 11
-			invBtn.AutoButtonColor = true
-			invBtn.LayoutOrder = idx
-			invBtn.Parent = invFrame
+				local invBtn = Instance.new("TextButton")
+				invBtn.Size = UDim2.new(1, 0, 0, 44)
+				invBtn.BackgroundColor3 = rarityColor(plant.rarityId)
+				invBtn.BackgroundTransparency = 0.25
+				local incomeStr = (NumberFormat.formatMoney(income):gsub("%$", ""))
+				invBtn.Text = string.format("%s (%s)\n+$%s/s", plant.speciesName, rarity and rarity.name or "?", incomeStr)
+				invBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+				invBtn.Font = Enum.Font.GothamBold
+				invBtn.TextSize = 11
+				invBtn.AutoButtonColor = true
+				invBtn.LayoutOrder = idx
+				invBtn.Parent = invFrame
 
-			local corner = Instance.new("UICorner")
-			corner.CornerRadius = UDim.new(0, 6)
-			corner.Parent = invBtn
+				local corner = Instance.new("UICorner")
+				corner.CornerRadius = UDim.new(0, 6)
+				corner.Parent = invBtn
 
-			local inventoryIndex = idx
-			invBtn.MouseButton1Click:Connect(function()
-				-- Find first empty slot and place there
-				for s = 1, GameConfig.PLOT_SIZE do
-					local slot = cachedPlotState[s]
-					if not slot or slot == false then
-						if self.onPlacePlant then
-							self.onPlacePlant(inventoryIndex, s)
+				local inventoryIndex = idx
+				invBtn.MouseButton1Click:Connect(function()
+					-- Find first empty slot and place there
+					for s = 1, GameConfig.PLOT_SIZE do
+						local slot = cachedPlotState[s]
+						if not slot or (slot :: any) == false then
+							if self.onPlacePlant then
+								self.onPlacePlant(inventoryIndex, s)
+							end
+							return
 						end
-						return
 					end
-				end
-				showPopup("¡Plot lleno!", Color3.fromRGB(255, 100, 100))
-			end)
+					showPopup("¡Plot lleno!", Color3.fromRGB(255, 100, 100))
+				end)
 
-			table.insert(inventoryButtons, invBtn)
+				table.insert(inventoryButtons, invBtn)
+			end
 		end
 	end
 

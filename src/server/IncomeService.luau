@@ -24,8 +24,11 @@ function IncomeService.calcIncome(data: PlayerData): number
 end
 
 function IncomeService.init(remotes: Folder)
-	updatePlayerRemote = remotes:WaitForChild("UpdatePlayerData") :: RemoteEvent
-	updateCoinsRemote = remotes:WaitForChild("UpdateCoins") :: RemoteEvent
+	updatePlayerRemote = remotes:WaitForChild("UpdatePlayerData", 10) :: RemoteEvent
+	updateCoinsRemote = remotes:WaitForChild("UpdateCoins", 10) :: RemoteEvent
+	if not updatePlayerRemote or not updateCoinsRemote then
+		error("[IncomeService] No se encontraron los RemoteEvents necesarios en Remotes.")
+	end
 
 	task.spawn(function()
 		while true do
