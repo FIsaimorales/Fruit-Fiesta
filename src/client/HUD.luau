@@ -165,14 +165,12 @@ local function createSlider(
 	addCorner(valLbl, 6)
 
 	-- Drag logic
-	local currentValue = default
-	local isDragging   = false
+	local isDragging = false
 
 	local function seek(absX: number)
 		local tx = track.AbsolutePosition.X
 		local tw = track.AbsoluteSize.X
 		local ratio = math.clamp((absX - tx) / tw, 0, 1)
-		currentValue       = ratio
 		fill.Size          = UDim2.new(ratio, 0, 1, 0)
 		thumb.Position     = UDim2.new(ratio, -10, 0.5, -10)
 		valLbl.Text        = tostring(math.round(ratio * 100))
