@@ -25,7 +25,6 @@ export type HUDInstance = {
 
 local HUD = {}
 
--- Helper to apply volume to SoundService groups
 local function applyGroupVolume(groupName: string, vol: number)
 	local soundGroup = SoundService:FindFirstChild(groupName)
 	if soundGroup and soundGroup:IsA("SoundGroup") then
@@ -46,7 +45,7 @@ function HUD.create(player: Player): HUDInstance
 
 	local playerGui = player:WaitForChild("PlayerGui") :: PlayerGui
 
-	-- Limpiar instancias previas si existen
+	-- Limpiar instancias previas
 	local existing = playerGui:FindFirstChild("FruitGardenHUD")
 	if existing then
 		existing:Destroy()
@@ -56,10 +55,11 @@ function HUD.create(player: Player): HUDInstance
 	screen.Name = "FruitGardenHUD"
 	screen.ResetOnSpawn = false
 	screen.IgnoreGuiInset = true
+	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling -- CRÍTICO: Garantiza que todos los hijos se rendericen sobre sus padres
 	screen.DisplayOrder = 10
 	screen.Parent = playerGui
 
-	-- Datos de estado en cliente
+	-- Variables de estado
 	local currentCoins = 0
 	local currentIncome = 0
 	local currentData: PlayerData = {
@@ -69,55 +69,54 @@ function HUD.create(player: Player): HUDInstance
 		rebirths = 0,
 	}
 
-	-- ── 1. BARRA SUPERIOR: PÍLDORA DE MONEDAS Y TICKER ─────────────────────────
+	-- ── 1. BARRA SUPERIOR: PÍLDORA DE MONEDAS ─────────────────────────────────
 
 	local topBarContainer = Instance.new("Frame")
-	topBarContainer.Size = UDim2.new(0, 320, 0, 60)
-	topBarContainer.Position = UDim2.new(0.5, 0, 0, 35)
+	topBarContainer.Size = UDim2.new(0, 340, 0, 58)
+	topBarContainer.Position = UDim2.new(0.5, 0, 0, 36)
 	topBarContainer.AnchorPoint = Vector2.new(0.5, 0)
 	topBarContainer.BackgroundTransparency = 1
 	topBarContainer.Parent = screen
 
 	local coinPill = Instance.new("Frame")
 	coinPill.Size = UDim2.new(1, 0, 1, 0)
-	coinPill.BackgroundColor3 = Color3.fromRGB(25, 28, 40)
+	coinPill.BackgroundColor3 = Color3.fromRGB(32, 38, 58)
 	coinPill.Parent = topBarContainer
 	UITheme.addCorner(coinPill, 20)
-	UITheme.addStroke(coinPill, Color3.fromRGB(245, 180, 40), 3)
-	UITheme.addGradient(coinPill, Color3.fromRGB(35, 40, 58), Color3.fromRGB(18, 20, 30))
+	UITheme.addStroke(coinPill, UITheme.Colors.GoldAccent, 3)
+	UITheme.addGradient(coinPill, Color3.fromRGB(42, 50, 76), Color3.fromRGB(24, 28, 44))
 
-	-- Icono de moneda 🪙
-	local coinIcon = Instance.new("TextLabel")
-	coinIcon.Size = UDim2.new(0, 44, 0, 44)
-	coinIcon.Position = UDim2.new(0, 8, 0.5, 0)
+	-- Icono de moneda (ImageLabel verificado)
+	local coinIcon = Instance.new("ImageLabel")
+	coinIcon.Size = UDim2.new(0, 36, 0, 36)
+	coinIcon.Position = UDim2.new(0, 12, 0.5, 0)
 	coinIcon.AnchorPoint = Vector2.new(0, 0.5)
 	coinIcon.BackgroundTransparency = 1
-	coinIcon.Text = "🪙"
-	coinIcon.TextSize = 28
+	coinIcon.Image = UITheme.ICONS.Coin
+	coinIcon.ImageColor3 = Color3.fromRGB(255, 220, 60)
 	coinIcon.Parent = coinPill
 
-	-- Texto de monedas
 	local coinsLabel = Instance.new("TextLabel")
-	coinsLabel.Size = UDim2.new(0.55, 0, 0.5, 0)
-	coinsLabel.Position = UDim2.new(0, 54, 0.1, 0)
+	coinsLabel.Size = UDim2.new(0.5, 0, 0.5, 0)
+	coinsLabel.Position = UDim2.new(0, 54, 0.12, 0)
 	coinsLabel.BackgroundTransparency = 1
 	coinsLabel.Text = "$0"
-	coinsLabel.TextColor3 = Color3.fromRGB(255, 230, 80)
+	coinsLabel.TextColor3 = UITheme.Colors.GoldAccent
 	coinsLabel.Font = UITheme.FontTitle
 	coinsLabel.TextSize = 22
 	coinsLabel.TextXAlignment = Enum.TextXAlignment.Left
 	coinsLabel.Parent = coinPill
 
-	-- Insignia de Ingreso por segundo (+$X/s)
+	-- Insignia de Ingresos por segundo (+$X/s)
 	local incomeBadge = Instance.new("Frame")
-	incomeBadge.Size = UDim2.new(0, 105, 0, 24)
+	incomeBadge.Size = UDim2.new(0, 110, 0, 26)
 	incomeBadge.Position = UDim2.new(1, -12, 0.5, 0)
 	incomeBadge.AnchorPoint = Vector2.new(1, 0.5)
-	incomeBadge.BackgroundColor3 = Color3.fromRGB(30, 140, 50)
+	incomeBadge.BackgroundColor3 = UITheme.Colors.GreenSuccessDark
 	incomeBadge.Parent = coinPill
-	UITheme.addCorner(incomeBadge, 12)
-	UITheme.addStroke(incomeBadge, Color3.fromRGB(60, 220, 90), 2)
-	UITheme.addGradient(incomeBadge, Color3.fromRGB(50, 190, 70), Color3.fromRGB(20, 110, 40))
+	UITheme.addCorner(incomeBadge, 13)
+	UITheme.addStroke(incomeBadge, UITheme.Colors.GreenSuccess, 2)
+	UITheme.addGradient(incomeBadge, UITheme.Colors.GreenSuccess, UITheme.Colors.GreenSuccessDark)
 
 	local incomeLabel = Instance.new("TextLabel")
 	incomeLabel.Size = UDim2.new(1, 0, 1, 0)
@@ -125,43 +124,35 @@ function HUD.create(player: Player): HUDInstance
 	incomeLabel.Text = "+$0/s"
 	incomeLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 	incomeLabel.Font = UITheme.FontBold
-	incomeLabel.TextSize = 12
+	incomeLabel.TextSize = 13
 	incomeLabel.Parent = incomeBadge
 
-	-- ── 2. BOTÓN DE CONFIGURACIÓN (TOP RIGHT GEAR ⚙️) ──────────────────────────
+	-- ── 2. BOTÓN DE CONFIGURACIÓN (TOP RIGHT ⚙️) ──────────────────────────────
 
 	local gearBtn = Instance.new("ImageButton")
 	gearBtn.Size = UDim2.new(0, 48, 0, 48)
-	gearBtn.Position = UDim2.new(1, -64, 0, 35)
-	gearBtn.BackgroundColor3 = Color3.fromRGB(28, 34, 52)
-	gearBtn.Image = "rbxassetid://17368089841"
+	gearBtn.Position = UDim2.new(1, -64, 0, 36)
+	gearBtn.BackgroundColor3 = Color3.fromRGB(34, 42, 64)
+	gearBtn.Image = UITheme.ICONS.Gear
+	gearBtn.ImageColor3 = Color3.fromRGB(255, 255, 255)
 	gearBtn.AutoButtonColor = false
 	gearBtn.BorderSizePixel = 0
 	gearBtn.Parent = screen
 	UITheme.addCorner(gearBtn, 14)
-	UITheme.addStroke(gearBtn, Color3.fromRGB(70, 85, 125), 2.5)
-	UITheme.addGradient(gearBtn, Color3.fromRGB(42, 50, 78), Color3.fromRGB(24, 28, 44))
+	UITheme.addStroke(gearBtn, UITheme.Colors.BorderOutline, 2.5)
+	UITheme.addGradient(gearBtn, Color3.fromRGB(48, 58, 88), Color3.fromRGB(26, 32, 50))
 	UIEffects.applyButtonBounce(gearBtn)
 
-	-- Fallback si el ID de imagen tarda en cargar
-	local gearIconLbl = Instance.new("TextLabel")
-	gearIconLbl.Size = UDim2.new(1, 0, 1, 0)
-	gearIconLbl.BackgroundTransparency = 1
-	gearIconLbl.Text = "⚙️"
-	gearIconLbl.TextSize = 22
-	gearIconLbl.Visible = false
-	gearIconLbl.Parent = gearBtn
-
-	-- ── 3. TELÓN DE FONDO (BACKDROP PARA MODALES) ─────────────────────────────
+	-- ── 3. TELÓN DE FONDO (MODAL BACKDROP) ────────────────────────────────────
 
 	local modalBackdrop = Instance.new("TextButton")
 	modalBackdrop.Size = UDim2.new(1, 0, 1, 0)
-	modalBackdrop.BackgroundColor3 = Color3.fromRGB(5, 5, 10)
+	modalBackdrop.BackgroundColor3 = Color3.fromRGB(12, 16, 28)
 	modalBackdrop.BackgroundTransparency = 1
 	modalBackdrop.Text = ""
 	modalBackdrop.AutoButtonColor = false
 	modalBackdrop.Visible = false
-	modalBackdrop.ZIndex = 20
+	modalBackdrop.ZIndex = 5
 	modalBackdrop.Parent = screen
 
 	local activeModal: GuiObject? = nil
@@ -188,17 +179,18 @@ function HUD.create(player: Player): HUDInstance
 		UIEffects.openModal(newModal, modalBackdrop)
 	end
 
-	-- ── 4. BARRA DE NAVEGACIÓN DOCK INFERIOR (ESTILO SIMULATOR 2026) ───────────
+	-- ── 4. BARRA DE NAVEGACIÓN DOCK INFERIOR (2026 AAA STYLE) ─────────────────
 
 	local dockFrame = Instance.new("Frame")
-	dockFrame.Size = UDim2.new(0, 390, 0, 72)
+	dockFrame.Size = UDim2.new(0, 420, 0, 74)
 	dockFrame.Position = UDim2.new(0.5, 0, 1, -16)
 	dockFrame.AnchorPoint = Vector2.new(0.5, 1)
-	dockFrame.BackgroundColor3 = Color3.fromRGB(20, 22, 34)
+	dockFrame.BackgroundColor3 = Color3.fromRGB(26, 32, 48)
+	dockFrame.ZIndex = 4
 	dockFrame.Parent = screen
-	UITheme.addCorner(dockFrame, 22)
-	UITheme.addStroke(dockFrame, Color3.fromRGB(60, 68, 95), 3)
-	UITheme.addGradient(dockFrame, Color3.fromRGB(30, 34, 52), Color3.fromRGB(15, 17, 26))
+	UITheme.addCorner(dockFrame, 24)
+	UITheme.addStroke(dockFrame, Color3.fromRGB(65, 80, 115), 3)
+	UITheme.addGradient(dockFrame, Color3.fromRGB(36, 44, 68), Color3.fromRGB(20, 24, 38))
 
 	local dockLayout = Instance.new("UIListLayout")
 	dockLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -207,66 +199,67 @@ function HUD.create(player: Player): HUDInstance
 	dockLayout.Padding = UDim.new(0, 10)
 	dockLayout.Parent = dockFrame
 
-	local function createDockButton(icon: string, label: string, topColor: Color3, bottomColor: Color3, strokeColor: Color3): TextButton
+	local function createDockButton(iconAsset: string, label: string, topColor: Color3, bottomColor: Color3, strokeColor: Color3): TextButton
 		local btn = Instance.new("TextButton")
-		btn.Size = UDim2.new(0, 84, 0, 56)
+		btn.Size = UDim2.new(0, 92, 0, 56)
 		btn.BackgroundColor3 = bottomColor
 		btn.Text = ""
 		btn.AutoButtonColor = false
 		btn.Parent = dockFrame
-		UITheme.addCorner(btn, 14)
+		UITheme.addCorner(btn, 16)
 		UITheme.addStroke(btn, strokeColor, 2.5)
 		UITheme.addGradient(btn, topColor, bottomColor)
 		UIEffects.applyButtonBounce(btn)
 
-		local iconLabel = Instance.new("TextLabel")
-		iconLabel.Size = UDim2.new(1, 0, 0.55, 0)
-		iconLabel.Position = UDim2.new(0, 0, 0.05, 0)
-		iconLabel.BackgroundTransparency = 1
-		iconLabel.Text = icon
-		iconLabel.TextSize = 22
-		iconLabel.Parent = btn
+		local iconImg = Instance.new("ImageLabel")
+		iconImg.Size = UDim2.new(0, 26, 0, 26)
+		iconImg.Position = UDim2.new(0.5, 0, 0.32, 0)
+		iconImg.AnchorPoint = Vector2.new(0.5, 0.5)
+		iconImg.BackgroundTransparency = 1
+		iconImg.Image = iconAsset
+		iconImg.ImageColor3 = Color3.fromRGB(255, 255, 255)
+		iconImg.Parent = btn
 
 		local textLabel = Instance.new("TextLabel")
 		textLabel.Size = UDim2.new(1, 0, 0.35, 0)
-		textLabel.Position = UDim2.new(0, 0, 0.6, 0)
+		textLabel.Position = UDim2.new(0, 0, 0.62, 0)
 		textLabel.BackgroundTransparency = 1
 		textLabel.Text = label
 		textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-		textLabel.Font = UITheme.FontBold
+		textLabel.Font = UITheme.FontTitle
 		textLabel.TextSize = 11
 		textLabel.Parent = btn
 
 		return btn
 	end
 
-	local eggDockBtn = createDockButton("🥚", "HUEVOS", Color3.fromRGB(255, 170, 40), Color3.fromRGB(200, 100, 15), Color3.fromRGB(150, 70, 10))
-	local plotDockBtn = createDockButton("🌱", "JARDÍN", Color3.fromRGB(70, 220, 90), Color3.fromRGB(25, 140, 45), Color3.fromRGB(15, 90, 30))
-	local invDockBtn = createDockButton("🎒", "MOCHILA", Color3.fromRGB(80, 160, 255), Color3.fromRGB(30, 90, 210), Color3.fromRGB(15, 55, 140))
-	local statsDockBtn = createDockButton("🏆", "STATS", Color3.fromRGB(210, 100, 255), Color3.fromRGB(130, 40, 200), Color3.fromRGB(85, 20, 135))
+	local eggDockBtn = createDockButton(UITheme.ICONS.Egg, "HUEVOS", Color3.fromRGB(255, 175, 45), Color3.fromRGB(205, 105, 15), Color3.fromRGB(155, 75, 10))
+	local plotDockBtn = createDockButton(UITheme.ICONS.Plant, "JARDÍN", Color3.fromRGB(75, 225, 95), Color3.fromRGB(30, 145, 50), Color3.fromRGB(18, 95, 32))
+	local invDockBtn = createDockButton(UITheme.ICONS.Backpack, "MOCHILA", Color3.fromRGB(85, 165, 255), Color3.fromRGB(35, 95, 215), Color3.fromRGB(18, 58, 145))
+	local statsDockBtn = createDockButton(UITheme.ICONS.Trophy, "STATS", Color3.fromRGB(215, 105, 255), Color3.fromRGB(135, 45, 205), Color3.fromRGB(90, 22, 140))
 
 	-- ── 5. VENTANA MODAL BASE (HELPER) ────────────────────────────────────────
 
 	local function createModalFrame(titleText: string, width: number, height: number): (Frame, TextButton)
 		local modal = Instance.new("Frame")
 		modal.Size = UDim2.new(0, width, 0, height)
-		modal.Position = UDim2.new(0.5, 0, 0.5, -20)
+		modal.Position = UDim2.new(0.5, 0, 0.5, -15)
 		modal.AnchorPoint = Vector2.new(0.5, 0.5)
-		modal.BackgroundColor3 = Color3.fromRGB(22, 25, 38)
+		modal.BackgroundColor3 = Color3.fromRGB(32, 38, 58)
 		modal.Visible = false
-		modal.ZIndex = 25
+		modal.ZIndex = 10
 		modal.Parent = screen
-		UITheme.addCorner(modal, 20)
-		UITheme.addStroke(modal, Color3.fromRGB(75, 85, 120), 3.5)
-		UITheme.addGradient(modal, Color3.fromRGB(32, 36, 54), Color3.fromRGB(18, 20, 32))
+		UITheme.addCorner(modal, 22)
+		UITheme.addStroke(modal, Color3.fromRGB(85, 100, 145), 3.5)
+		UITheme.addGradient(modal, Color3.fromRGB(42, 50, 76), Color3.fromRGB(24, 28, 44))
 
 		-- Header
 		local header = Instance.new("Frame")
-		header.Size = UDim2.new(1, 0, 0, 48)
-		header.BackgroundColor3 = Color3.fromRGB(30, 34, 50)
+		header.Size = UDim2.new(1, 0, 0, 52)
+		header.BackgroundColor3 = Color3.fromRGB(40, 48, 72)
 		header.Parent = modal
-		UITheme.addCorner(header, 18)
-		UITheme.addGradient(header, Color3.fromRGB(45, 52, 78), Color3.fromRGB(25, 28, 42))
+		UITheme.addCorner(header, 20)
+		UITheme.addGradient(header, Color3.fromRGB(56, 66, 98), Color3.fromRGB(34, 40, 62))
 
 		local title = Instance.new("TextLabel")
 		title.Size = UDim2.new(1, -60, 1, 0)
@@ -281,10 +274,10 @@ function HUD.create(player: Player): HUDInstance
 
 		-- Botón cerrar
 		local closeBtn = Instance.new("TextButton")
-		closeBtn.Size = UDim2.new(0, 32, 0, 32)
-		closeBtn.Position = UDim2.new(1, -40, 0.5, 0)
+		closeBtn.Size = UDim2.new(0, 34, 0, 34)
+		closeBtn.Position = UDim2.new(1, -44, 0.5, 0)
 		closeBtn.AnchorPoint = Vector2.new(0, 0.5)
-		closeBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 60)
+		closeBtn.BackgroundColor3 = UITheme.Colors.RedDanger
 		closeBtn.Text = "✕"
 		closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 		closeBtn.Font = UITheme.FontBold
@@ -292,7 +285,7 @@ function HUD.create(player: Player): HUDInstance
 		closeBtn.AutoButtonColor = false
 		closeBtn.Parent = header
 		UITheme.addCorner(closeBtn, 10)
-		UITheme.addStroke(closeBtn, Color3.fromRGB(150, 25, 35), 2)
+		UITheme.addStroke(closeBtn, Color3.fromRGB(160, 30, 40), 2)
 		UIEffects.applyButtonBounce(closeBtn)
 
 		closeBtn.MouseButton1Click:Connect(closeCurrentModal)
@@ -300,13 +293,13 @@ function HUD.create(player: Player): HUDInstance
 		return modal, closeBtn
 	end
 
-	-- ── 6. MODAL: CONFIGURACIÓN / SETTINGS (SLIDERS AUDIO) ─────────────────────
+	-- ── 6. MODAL: CONFIGURACIÓN ────────────────────────────────────────────────
 
-	local settingsModal = createModalFrame("⚙️ CONFIGURACIÓN", 360, 340)
+	local settingsModal = createModalFrame("⚙️ CONFIGURACIÓN", 380, 350)
 
 	local settingsContainer = Instance.new("Frame")
-	settingsContainer.Size = UDim2.new(1, -24, 1, -66)
-	settingsContainer.Position = UDim2.new(0, 12, 0, 56)
+	settingsContainer.Size = UDim2.new(1, -24, 1, -68)
+	settingsContainer.Position = UDim2.new(0, 12, 0, 58)
 	settingsContainer.BackgroundTransparency = 1
 	settingsContainer.Parent = settingsModal
 
@@ -314,14 +307,13 @@ function HUD.create(player: Player): HUDInstance
 	settingsLayout.Padding = UDim.new(0, 12)
 	settingsLayout.Parent = settingsContainer
 
-	-- Helper para crear sliders interactivos y modernos
 	local function createSlider(parent: Instance, icon: string, title: string, initialVol: number, onChange: (number) -> ())
 		local card = Instance.new("Frame")
-		card.Size = UDim2.new(1, 0, 0, 64)
-		card.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
+		card.Size = UDim2.new(1, 0, 0, 66)
+		card.BackgroundColor3 = Color3.fromRGB(42, 50, 76)
 		card.Parent = parent
-		UITheme.addCorner(card, 12)
-		UITheme.addStroke(card, Color3.fromRGB(60, 70, 100), 1.5)
+		UITheme.addCorner(card, 14)
+		UITheme.addStroke(card, UITheme.Colors.BorderOutline, 1.5)
 
 		local iconLbl = Instance.new("TextLabel")
 		iconLbl.Size = UDim2.new(0, 36, 0, 30)
@@ -336,7 +328,7 @@ function HUD.create(player: Player): HUDInstance
 		titleLbl.Position = UDim2.new(0, 48, 0, 4)
 		titleLbl.BackgroundTransparency = 1
 		titleLbl.Text = title
-		titleLbl.TextColor3 = Color3.fromRGB(220, 230, 255)
+		titleLbl.TextColor3 = Color3.fromRGB(230, 240, 255)
 		titleLbl.Font = UITheme.FontBold
 		titleLbl.TextSize = 13
 		titleLbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -348,22 +340,21 @@ function HUD.create(player: Player): HUDInstance
 		valLbl.AnchorPoint = Vector2.new(1, 0)
 		valLbl.BackgroundTransparency = 1
 		valLbl.Text = math.floor(initialVol * 100) .. "%"
-		valLbl.TextColor3 = Color3.fromRGB(255, 220, 80)
+		valLbl.TextColor3 = UITheme.Colors.GoldAccent
 		valLbl.Font = UITheme.FontTitle
 		valLbl.TextSize = 13
 		valLbl.TextXAlignment = Enum.TextXAlignment.Right
 		valLbl.Parent = card
 
-		-- Barra del Slider
 		local track = Instance.new("TextButton")
 		track.Size = UDim2.new(1, -24, 0, 16)
 		track.Position = UDim2.new(0, 12, 1, -22)
-		track.BackgroundColor3 = Color3.fromRGB(16, 18, 28)
+		track.BackgroundColor3 = Color3.fromRGB(22, 26, 40)
 		track.Text = ""
 		track.AutoButtonColor = false
 		track.Parent = card
 		UITheme.addCorner(track, 8)
-		UITheme.addStroke(track, Color3.fromRGB(45, 52, 75), 1.5)
+		UITheme.addStroke(track, Color3.fromRGB(60, 72, 105), 1.5)
 
 		local fill = Instance.new("Frame")
 		fill.Size = UDim2.new(initialVol, 0, 1, 0)
@@ -383,7 +374,6 @@ function HUD.create(player: Player): HUDInstance
 		UITheme.addStroke(knob, Color3.fromRGB(30, 100, 220), 2)
 
 		local dragging = false
-
 		local function updateFromInput(inputPos: Vector2)
 			local trackAbsPos = track.AbsolutePosition.X
 			local trackAbsSize = track.AbsoluteSize.X
@@ -415,7 +405,6 @@ function HUD.create(player: Player): HUDInstance
 		end)
 	end
 
-	-- Slider General
 	createSlider(settingsContainer, "🔊", "Volumen General", 1.0, function(v)
 		for _, child in SoundService:GetChildren() do
 			if child:IsA("SoundGroup") then
@@ -424,12 +413,10 @@ function HUD.create(player: Player): HUDInstance
 		end
 	end)
 
-	-- Slider Música
 	createSlider(settingsContainer, "🎵", "Música de Fondo", 1.0, function(v)
 		applyGroupVolume("Music", v)
 	end)
 
-	-- Slider Efectos
 	createSlider(settingsContainer, "✨", "Efectos de Sonido", 1.0, function(v)
 		applyGroupVolume("Effects", v)
 	end)
@@ -438,42 +425,42 @@ function HUD.create(player: Player): HUDInstance
 		switchModal(settingsModal)
 	end)
 
-	-- ── 7. MODAL: TIENDA DE HUEVOS (EGG SHOP) ──────────────────────────────────
+	-- ── 7. MODAL: TIENDA DE HUEVOS ─────────────────────────────────────────────
 
-	local eggModal = createModalFrame("🥚 TIENDA DE HUEVOS", 380, 420)
+	local eggModal = createModalFrame("🥚 TIENDA DE HUEVOS", 400, 440)
 
 	local eggCard = Instance.new("Frame")
-	eggCard.Size = UDim2.new(1, -30, 0, 160)
-	eggCard.Position = UDim2.new(0, 15, 0, 60)
-	eggCard.BackgroundColor3 = Color3.fromRGB(30, 35, 52)
+	eggCard.Size = UDim2.new(1, -30, 0, 165)
+	eggCard.Position = UDim2.new(0, 15, 0, 62)
+	eggCard.BackgroundColor3 = Color3.fromRGB(42, 50, 76)
 	eggCard.Parent = eggModal
-	UITheme.addCorner(eggCard, 16)
-	UITheme.addStroke(eggCard, Color3.fromRGB(245, 180, 40), 2.5)
+	UITheme.addCorner(eggCard, 18)
+	UITheme.addStroke(eggCard, UITheme.Colors.GoldAccent, 2.5)
 
-	local eggBigIcon = Instance.new("TextLabel")
-	eggBigIcon.Size = UDim2.new(0, 80, 0, 80)
-	eggBigIcon.Position = UDim2.new(0.5, 0, 0.35, 0)
+	local eggBigIcon = Instance.new("ImageLabel")
+	eggBigIcon.Size = UDim2.new(0, 72, 0, 72)
+	eggBigIcon.Position = UDim2.new(0.5, 0, 0.38, 0)
 	eggBigIcon.AnchorPoint = Vector2.new(0.5, 0.5)
 	eggBigIcon.BackgroundTransparency = 1
-	eggBigIcon.Text = "🥚"
-	eggBigIcon.TextSize = 56
+	eggBigIcon.Image = UITheme.ICONS.Egg
+	eggBigIcon.ImageColor3 = Color3.fromRGB(255, 220, 80)
 	eggBigIcon.Parent = eggCard
 
 	local eggTitle = Instance.new("TextLabel")
-	eggTitle.Size = UDim2.new(1, 0, 0, 24)
-	eggTitle.Position = UDim2.new(0, 0, 0.72, 0)
+	eggTitle.Size = UDim2.new(1, 0, 0, 26)
+	eggTitle.Position = UDim2.new(0, 0, 0.74, 0)
 	eggTitle.BackgroundTransparency = 1
-	eggTitle.Text = "Huevo Frutal Básico"
-	eggTitle.TextColor3 = Color3.fromRGB(255, 230, 100)
+	eggTitle.Text = "Huevo Frutal Mágico"
+	eggTitle.TextColor3 = UITheme.Colors.GoldAccent
 	eggTitle.Font = UITheme.FontTitle
-	eggTitle.TextSize = 16
+	eggTitle.TextSize = 17
 	eggTitle.Parent = eggCard
 
 	-- Vista previa de probabilidades
 	local oddsContainer = Instance.new("Frame")
-	oddsContainer.Size = UDim2.new(1, -30, 0, 110)
-	oddsContainer.Position = UDim2.new(0, 15, 0, 230)
-	oddsContainer.BackgroundColor3 = Color3.fromRGB(25, 28, 42)
+	oddsContainer.Size = UDim2.new(1, -30, 0, 115)
+	oddsContainer.Position = UDim2.new(0, 15, 0, 240)
+	oddsContainer.BackgroundColor3 = Color3.fromRGB(36, 44, 68)
 	oddsContainer.Parent = eggModal
 	UITheme.addCorner(oddsContainer, 14)
 
@@ -482,7 +469,7 @@ function HUD.create(player: Player): HUDInstance
 	oddsTitle.Position = UDim2.new(0, 0, 0, 4)
 	oddsTitle.BackgroundTransparency = 1
 	oddsTitle.Text = "PROBABILIDADES DE RAREZA"
-	oddsTitle.TextColor3 = Color3.fromRGB(180, 190, 215)
+	oddsTitle.TextColor3 = UITheme.Colors.TextMuted
 	oddsTitle.Font = UITheme.FontBold
 	oddsTitle.TextSize = 11
 	oddsTitle.Parent = oddsContainer
@@ -516,26 +503,25 @@ function HUD.create(player: Player): HUDInstance
 		badgeText.Parent = badge
 	end
 
-	-- Botón grande de comprar huevo
 	local buyEggBtn = Instance.new("TextButton")
-	buyEggBtn.Size = UDim2.new(1, -30, 0, 50)
-	buyEggBtn.Position = UDim2.new(0, 15, 1, -62)
-	buyEggBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 70)
-	buyEggBtn.Text = "🥚 ABRIR POR $" .. GameConfig.EGG_COST
+	buyEggBtn.Size = UDim2.new(1, -30, 0, 52)
+	buyEggBtn.Position = UDim2.new(0, 15, 1, -64)
+	buyEggBtn.BackgroundColor3 = UITheme.Colors.GreenSuccess
+	buyEggBtn.Text = "🥚 ABRIR HUEVO ($" .. GameConfig.EGG_COST .. ")"
 	buyEggBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	buyEggBtn.Font = UITheme.FontTitle
 	buyEggBtn.TextSize = 18
 	buyEggBtn.AutoButtonColor = false
 	buyEggBtn.Parent = eggModal
 	UITheme.addCorner(buyEggBtn, 16)
-	UITheme.addStroke(buyEggBtn, Color3.fromRGB(20, 110, 40), 3)
-	UITheme.addGradient(buyEggBtn, Color3.fromRGB(60, 210, 95), Color3.fromRGB(30, 150, 60))
+	UITheme.addStroke(buyEggBtn, UITheme.Colors.GreenSuccessDark, 3)
+	UITheme.addGradient(buyEggBtn, Color3.fromRGB(65, 225, 100), UITheme.Colors.GreenSuccessDark)
 	UIEffects.applyButtonBounce(buyEggBtn)
 
 	buyEggBtn.MouseButton1Click:Connect(function()
 		if currentCoins < GameConfig.EGG_COST then
 			UIEffects.playSound("Error")
-			UIEffects.spawnFloatingText(screen, "¡Monedas Insuficientes!", UDim2.new(0.5, 0, 0.5, 0), Color3.fromRGB(255, 80, 80), 24)
+			UIEffects.spawnFloatingText(screen, "¡Monedas Insuficientes!", UDim2.new(0.5, 0, 0.5, 0), UITheme.Colors.RedDanger, 24)
 			return
 		end
 		if self.onOpenEgg then
@@ -549,11 +535,11 @@ function HUD.create(player: Player): HUDInstance
 
 	-- ── 8. MODAL: JARDÍN (PLOT MACETAS) ────────────────────────────────────────
 
-	local plotModal = createModalFrame("🌱 MI JARDÍN (MACETAS)", 440, 420)
+	local plotModal = createModalFrame("🌱 MI JARDÍN (MACETAS)", 460, 440)
 
 	local plotGridContainer = Instance.new("Frame")
-	plotGridContainer.Size = UDim2.new(1, -24, 1, -66)
-	plotGridContainer.Position = UDim2.new(0, 12, 0, 56)
+	plotGridContainer.Size = UDim2.new(1, -24, 1, -70)
+	plotGridContainer.Position = UDim2.new(0, 12, 0, 60)
 	plotGridContainer.BackgroundTransparency = 1
 	plotGridContainer.Parent = plotModal
 
@@ -568,12 +554,12 @@ function HUD.create(player: Player): HUDInstance
 
 	for slotIdx = 1, GameConfig.PLOT_SIZE do
 		local slotCard = Instance.new("TextButton")
-		slotCard.BackgroundColor3 = Color3.fromRGB(30, 36, 52)
+		slotCard.BackgroundColor3 = Color3.fromRGB(42, 50, 76)
 		slotCard.Text = ""
 		slotCard.AutoButtonColor = false
 		slotCard.Parent = plotGridContainer
-		UITheme.addCorner(slotCard, 12)
-		UITheme.addStroke(slotCard, Color3.fromRGB(60, 70, 95), 2)
+		UITheme.addCorner(slotCard, 14)
+		UITheme.addStroke(slotCard, UITheme.Colors.BorderOutline, 2)
 		UIEffects.applyButtonBounce(slotCard)
 
 		local iconLbl = Instance.new("TextLabel")
@@ -582,7 +568,7 @@ function HUD.create(player: Player): HUDInstance
 		iconLbl.Position = UDim2.new(0, 0, 0.05, 0)
 		iconLbl.BackgroundTransparency = 1
 		iconLbl.Text = "🪴"
-		iconLbl.TextSize = 26
+		iconLbl.TextSize = 28
 		iconLbl.Parent = slotCard
 
 		local nameLbl = Instance.new("TextLabel")
@@ -591,7 +577,7 @@ function HUD.create(player: Player): HUDInstance
 		nameLbl.Position = UDim2.new(0, 2, 0.48, 0)
 		nameLbl.BackgroundTransparency = 1
 		nameLbl.Text = "Vacío"
-		nameLbl.TextColor3 = Color3.fromRGB(180, 190, 210)
+		nameLbl.TextColor3 = Color3.fromRGB(200, 215, 240)
 		nameLbl.Font = UITheme.FontBold
 		nameLbl.TextSize = 10
 		nameLbl.Parent = slotCard
@@ -602,7 +588,7 @@ function HUD.create(player: Player): HUDInstance
 		subLbl.Position = UDim2.new(0, 2, 0.74, 0)
 		subLbl.BackgroundTransparency = 1
 		subLbl.Text = "(" .. slotIdx .. ")"
-		subLbl.TextColor3 = Color3.fromRGB(120, 130, 150)
+		subLbl.TextColor3 = UITheme.Colors.TextMuted
 		subLbl.Font = UITheme.FontMedium
 		subLbl.TextSize = 9
 		subLbl.Parent = slotCard
@@ -616,7 +602,6 @@ function HUD.create(player: Player): HUDInstance
 					UIEffects.playSound("Pop")
 				end
 			else
-				-- Si está vacío, abrir inventario para plantar
 				switchModal(invModal)
 			end
 		end)
@@ -630,32 +615,31 @@ function HUD.create(player: Player): HUDInstance
 
 	-- ── 9. MODAL: MOCHILA / INVENTARIO ─────────────────────────────────────────
 
-	local invModal = createModalFrame("🎒 MOCHILA DE FRUTAS", 440, 450)
+	local invModal = createModalFrame("🎒 MOCHILA DE FRUTAS", 460, 460)
 
-	-- Subheader con Auto-Equipar
 	local invTopBar = Instance.new("Frame")
-	invTopBar.Size = UDim2.new(1, -24, 0, 42)
-	invTopBar.Position = UDim2.new(0, 12, 0, 54)
-	invTopBar.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
+	invTopBar.Size = UDim2.new(1, -24, 0, 44)
+	invTopBar.Position = UDim2.new(0, 12, 0, 56)
+	invTopBar.BackgroundColor3 = Color3.fromRGB(40, 48, 72)
 	invTopBar.Parent = invModal
 	UITheme.addCorner(invTopBar, 12)
 
 	local invCountLabel = Instance.new("TextLabel")
 	invCountLabel.Size = UDim2.new(0.4, 0, 1, 0)
-	invCountLabel.Position = UDim2.new(0, 12, 0, 0)
+	invCountLabel.Position = UDim2.new(0, 14, 0, 0)
 	invCountLabel.BackgroundTransparency = 1
 	invCountLabel.Text = "Frutas: 0"
-	invCountLabel.TextColor3 = Color3.fromRGB(200, 210, 235)
+	invCountLabel.TextColor3 = Color3.fromRGB(220, 230, 255)
 	invCountLabel.Font = UITheme.FontBold
-	invCountLabel.TextSize = 13
+	invCountLabel.TextSize = 14
 	invCountLabel.TextXAlignment = Enum.TextXAlignment.Left
 	invCountLabel.Parent = invTopBar
 
 	local autoEquipBtn = Instance.new("TextButton")
-	autoEquipBtn.Size = UDim2.new(0, 160, 0, 32)
-	autoEquipBtn.Position = UDim2.new(1, -170, 0.5, 0)
+	autoEquipBtn.Size = UDim2.new(0, 175, 0, 34)
+	autoEquipBtn.Position = UDim2.new(1, -185, 0.5, 0)
 	autoEquipBtn.AnchorPoint = Vector2.new(0, 0.5)
-	autoEquipBtn.BackgroundColor3 = Color3.fromRGB(240, 150, 30)
+	autoEquipBtn.BackgroundColor3 = Color3.fromRGB(250, 160, 30)
 	autoEquipBtn.Text = "⚡ EQUIPAR MEJORES"
 	autoEquipBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	autoEquipBtn.Font = UITheme.FontTitle
@@ -663,41 +647,40 @@ function HUD.create(player: Player): HUDInstance
 	autoEquipBtn.AutoButtonColor = false
 	autoEquipBtn.Parent = invTopBar
 	UITheme.addCorner(autoEquipBtn, 10)
-	UITheme.addStroke(autoEquipBtn, Color3.fromRGB(160, 80, 10), 2)
-	UITheme.addGradient(autoEquipBtn, Color3.fromRGB(255, 180, 50), Color3.fromRGB(210, 110, 15))
+	UITheme.addStroke(autoEquipBtn, Color3.fromRGB(170, 90, 10), 2)
+	UITheme.addGradient(autoEquipBtn, Color3.fromRGB(255, 190, 60), Color3.fromRGB(220, 120, 15))
 	UIEffects.applyButtonBounce(autoEquipBtn)
 
 	autoEquipBtn.MouseButton1Click:Connect(function()
 		if self.onAutoEquip then
 			self.onAutoEquip()
 			UIEffects.playSound("Fanfare")
-			UIEffects.spawnFloatingText(screen, "¡Mejores Frutas Plantadas!", UDim2.new(0.5, 0, 0.5, 0), Color3.fromRGB(255, 220, 80), 22)
+			UIEffects.spawnFloatingText(screen, "¡Mejores Frutas Plantadas!", UDim2.new(0.5, 0, 0.5, 0), UITheme.Colors.GoldAccent, 22)
 		end
 	end)
 
 	local invScroll = Instance.new("ScrollingFrame")
-	invScroll.Size = UDim2.new(1, -24, 1, -112)
-	invScroll.Position = UDim2.new(0, 12, 0, 102)
-	invScroll.BackgroundColor3 = Color3.fromRGB(22, 25, 38)
-	invScroll.BackgroundTransparency = 0.5
+	invScroll.Size = UDim2.new(1, -24, 1, -116)
+	invScroll.Position = UDim2.new(0, 12, 0, 106)
+	invScroll.BackgroundColor3 = Color3.fromRGB(26, 32, 48)
 	invScroll.BorderSizePixel = 0
-	invScroll.ScrollBarThickness = 5
+	invScroll.ScrollBarThickness = 6
 	invScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 	invScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	invScroll.Parent = invModal
-	UITheme.addCorner(invScroll, 12)
+	UITheme.addCorner(invScroll, 14)
 
 	local invGridLayout = Instance.new("UIGridLayout")
-	invGridLayout.CellSize = UDim2.new(0, 94, 0, 105)
+	invGridLayout.CellSize = UDim2.new(0, 98, 0, 110)
 	invGridLayout.CellPadding = UDim2.new(0, 8, 0, 8)
 	invGridLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	invGridLayout.Parent = invScroll
 
 	local invScrollPadding = Instance.new("UIPadding")
-	invScrollPadding.PaddingTop = UDim.new(0, 6)
-	invScrollPadding.PaddingLeft = UDim.new(0, 6)
-	invScrollPadding.PaddingRight = UDim.new(0, 6)
-	invScrollPadding.PaddingBottom = UDim.new(0, 6)
+	invScrollPadding.PaddingTop = UDim.new(0, 8)
+	invScrollPadding.PaddingLeft = UDim.new(0, 8)
+	invScrollPadding.PaddingRight = UDim.new(0, 8)
+	invScrollPadding.PaddingBottom = UDim.new(0, 8)
 	invScrollPadding.Parent = invScroll
 
 	local inventoryCards: { Frame } = {}
@@ -706,41 +689,43 @@ function HUD.create(player: Player): HUDInstance
 		switchModal(invModal)
 	end)
 
-	-- ── 10. MODAL: ESTADÍSTICAS (STATS) ────────────────────────────────────────
+	-- ── 10. MODAL: ESTADÍSTICAS & LOGROS ──────────────────────────────────────
 
-	local statsModal = createModalFrame("🏆 TUS ESTADÍSTICAS", 380, 360)
+	local statsModal = createModalFrame("🏆 TUS ESTADÍSTICAS", 400, 380)
 
 	local statsContainer = Instance.new("Frame")
-	statsContainer.Size = UDim2.new(1, -30, 1, -70)
-	statsContainer.Position = UDim2.new(0, 15, 0, 56)
+	statsContainer.Size = UDim2.new(1, -24, 1, -68)
+	statsContainer.Position = UDim2.new(0, 12, 0, 58)
 	statsContainer.BackgroundTransparency = 1
 	statsContainer.Parent = statsModal
 
 	local statsLayout = Instance.new("UIListLayout")
-	statsLayout.Padding = UDim.new(0, 8)
+	statsLayout.Padding = UDim.new(0, 10)
 	statsLayout.Parent = statsContainer
 
-	local function makeStatRow(icon: string, title: string, initialVal: string): TextLabel
+	local function makeStatRow(iconAsset: string, title: string, initialVal: string): TextLabel
 		local row = Instance.new("Frame")
-		row.Size = UDim2.new(1, 0, 0, 48)
-		row.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
+		row.Size = UDim2.new(1, 0, 0, 52)
+		row.BackgroundColor3 = Color3.fromRGB(42, 50, 76)
 		row.Parent = statsContainer
-		UITheme.addCorner(row, 12)
-		UITheme.addStroke(row, Color3.fromRGB(60, 68, 95), 1.5)
+		UITheme.addCorner(row, 14)
+		UITheme.addStroke(row, UITheme.Colors.BorderOutline, 1.5)
 
-		local iconLbl = Instance.new("TextLabel")
-		iconLbl.Size = UDim2.new(0, 40, 1, 0)
-		iconLbl.BackgroundTransparency = 1
-		iconLbl.Text = icon
-		iconLbl.TextSize = 22
-		iconLbl.Parent = row
+		local iconImg = Instance.new("ImageLabel")
+		iconImg.Size = UDim2.new(0, 28, 0, 28)
+		iconImg.Position = UDim2.new(0, 12, 0.5, 0)
+		iconImg.AnchorPoint = Vector2.new(0, 0.5)
+		iconImg.BackgroundTransparency = 1
+		iconImg.Image = iconAsset
+		iconImg.ImageColor3 = Color3.fromRGB(255, 255, 255)
+		iconImg.Parent = row
 
 		local nameLbl = Instance.new("TextLabel")
 		nameLbl.Size = UDim2.new(0.5, 0, 1, 0)
-		nameLbl.Position = UDim2.new(0, 44, 0, 0)
+		nameLbl.Position = UDim2.new(0, 50, 0, 0)
 		nameLbl.BackgroundTransparency = 1
 		nameLbl.Text = title
-		nameLbl.TextColor3 = Color3.fromRGB(200, 210, 235)
+		nameLbl.TextColor3 = Color3.fromRGB(220, 230, 255)
 		nameLbl.Font = UITheme.FontBold
 		nameLbl.TextSize = 13
 		nameLbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -748,67 +733,65 @@ function HUD.create(player: Player): HUDInstance
 
 		local valLbl = Instance.new("TextLabel")
 		valLbl.Size = UDim2.new(0.4, 0, 1, 0)
-		valLbl.Position = UDim2.new(1, -12, 0, 0)
+		valLbl.Position = UDim2.new(1, -14, 0, 0)
 		valLbl.AnchorPoint = Vector2.new(1, 0)
 		valLbl.BackgroundTransparency = 1
 		valLbl.Text = initialVal
-		valLbl.TextColor3 = Color3.fromRGB(255, 230, 90)
+		valLbl.TextColor3 = UITheme.Colors.GoldAccent
 		valLbl.Font = UITheme.FontTitle
-		valLbl.TextSize = 14
+		valLbl.TextSize = 15
 		valLbl.TextXAlignment = Enum.TextXAlignment.Right
 		valLbl.Parent = row
 
 		return valLbl
 	end
 
-	local statIncomeVal = makeStatRow("⚡", "Ingreso Total", "+$0/s")
-	local statPlantedVal = makeStatRow("🌱", "Frutas Plantadas", "0 / 10")
-	local statBackpackVal = makeStatRow("🎒", "Frutas en Mochila", "0")
-	local statCoinsVal = makeStatRow("🪙", "Monedas Actuales", "$0")
+	local statIncomeVal = makeStatRow(UITheme.ICONS.Bolt, "Ingreso Total", "+$0/s")
+	local statPlantedVal = makeStatRow(UITheme.ICONS.Plant, "Frutas Plantadas", "0 / 10")
+	local statBackpackVal = makeStatRow(UITheme.ICONS.Backpack, "Frutas en Mochila", "0")
+	local statCoinsVal = makeStatRow(UITheme.ICONS.Coin, "Monedas Actuales", "$0")
 
 	statsDockBtn.MouseButton1Click:Connect(function()
 		switchModal(statsModal)
 	end)
 
-	-- ── 11. CINEMÁTICA DE APERTURA DE HUEVOS (GACHA REVEAL MODAL) ──────────────
+	-- ── 11. CINEMÁTICA DE APERTURA DE HUEVOS (GACHA REVEAL) ────────────────────
 
 	local gachaOverlay = Instance.new("Frame")
 	gachaOverlay.Size = UDim2.new(1, 0, 1, 0)
-	gachaOverlay.BackgroundColor3 = Color3.fromRGB(5, 7, 15)
+	gachaOverlay.BackgroundColor3 = Color3.fromRGB(8, 12, 22)
 	gachaOverlay.BackgroundTransparency = 0.15
 	gachaOverlay.Visible = false
 	gachaOverlay.ZIndex = 100
 	gachaOverlay.Parent = screen
 
 	local gachaCard = Instance.new("Frame")
-	gachaCard.Size = UDim2.new(0, 320, 0, 420)
+	gachaCard.Size = UDim2.new(0, 330, 0, 430)
 	gachaCard.Position = UDim2.new(0.5, 0, 0.5, 0)
 	gachaCard.AnchorPoint = Vector2.new(0.5, 0.5)
-	gachaCard.BackgroundColor3 = Color3.fromRGB(26, 30, 46)
+	gachaCard.BackgroundColor3 = Color3.fromRGB(36, 44, 68)
 	gachaCard.ZIndex = 105
 	gachaCard.Parent = gachaOverlay
-	UITheme.addCorner(gachaCard, 24)
-	local gachaStroke = UITheme.addStroke(gachaCard, Color3.fromRGB(255, 200, 50), 4)
+	UITheme.addCorner(gachaCard, 26)
+	local gachaStroke = UITheme.addStroke(gachaCard, UITheme.Colors.GoldAccent, 4)
 
 	local gachaHeader = Instance.new("TextLabel")
 	gachaHeader.Size = UDim2.new(1, 0, 0, 36)
 	gachaHeader.Position = UDim2.new(0, 0, 0, 16)
 	gachaHeader.BackgroundTransparency = 1
 	gachaHeader.Text = "✨ ¡NUEVA FRUTA DESBLOQUEADA! ✨"
-	gachaHeader.TextColor3 = Color3.fromRGB(255, 230, 100)
+	gachaHeader.TextColor3 = UITheme.Colors.GoldAccent
 	gachaHeader.Font = UITheme.FontTitle
 	gachaHeader.TextSize = 14
-	gachaHeader.ZIndex = 110
 	gachaHeader.Parent = gachaCard
 
 	local gachaRarityBanner = Instance.new("Frame")
-	gachaRarityBanner.Size = UDim2.new(0, 180, 0, 30)
-	gachaRarityBanner.Position = UDim2.new(0.5, 0, 0, 60)
+	gachaRarityBanner.Size = UDim2.new(0, 190, 0, 32)
+	gachaRarityBanner.Position = UDim2.new(0.5, 0, 0, 58)
 	gachaRarityBanner.AnchorPoint = Vector2.new(0.5, 0)
 	gachaRarityBanner.BackgroundColor3 = Color3.fromRGB(240, 160, 30)
-	gachaRarityBanner.ZIndex = 110
 	gachaRarityBanner.Parent = gachaCard
-	UITheme.addCorner(gachaRarityBanner, 15)
+	UITheme.addCorner(gachaRarityBanner, 16)
 
 	local gachaRarityLabel = Instance.new("TextLabel")
 	gachaRarityLabel.Size = UDim2.new(1, 0, 1, 0)
@@ -817,36 +800,32 @@ function HUD.create(player: Player): HUDInstance
 	gachaRarityLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 	gachaRarityLabel.Font = UITheme.FontTitle
 	gachaRarityLabel.TextSize = 13
-	gachaRarityLabel.ZIndex = 112
 	gachaRarityLabel.Parent = gachaRarityBanner
 
 	local gachaFruitIcon = Instance.new("TextLabel")
 	gachaFruitIcon.Size = UDim2.new(0, 120, 0, 120)
-	gachaFruitIcon.Position = UDim2.new(0.5, 0, 0.45, 0)
+	gachaFruitIcon.Position = UDim2.new(0.5, 0, 0.46, 0)
 	gachaFruitIcon.AnchorPoint = Vector2.new(0.5, 0.5)
 	gachaFruitIcon.BackgroundTransparency = 1
 	gachaFruitIcon.Text = "🍎"
 	gachaFruitIcon.TextSize = 80
-	gachaFruitIcon.ZIndex = 110
 	gachaFruitIcon.Parent = gachaCard
 
 	local gachaFruitName = Instance.new("TextLabel")
 	gachaFruitName.Size = UDim2.new(1, 0, 0, 32)
-	gachaFruitName.Position = UDim2.new(0, 0, 0.68, 0)
+	gachaFruitName.Position = UDim2.new(0, 0, 0.69, 0)
 	gachaFruitName.BackgroundTransparency = 1
 	gachaFruitName.Text = "Manzana"
 	gachaFruitName.TextColor3 = Color3.fromRGB(255, 255, 255)
 	gachaFruitName.Font = UITheme.FontTitle
 	gachaFruitName.TextSize = 22
-	gachaFruitName.ZIndex = 110
 	gachaFruitName.Parent = gachaCard
 
 	local gachaIncomeBadge = Instance.new("Frame")
 	gachaIncomeBadge.Size = UDim2.new(0, 160, 0, 32)
 	gachaIncomeBadge.Position = UDim2.new(0.5, 0, 0.78, 0)
 	gachaIncomeBadge.AnchorPoint = Vector2.new(0.5, 0)
-	gachaIncomeBadge.BackgroundColor3 = Color3.fromRGB(35, 150, 60)
-	gachaIncomeBadge.ZIndex = 110
+	gachaIncomeBadge.BackgroundColor3 = UITheme.Colors.GreenSuccessDark
 	gachaIncomeBadge.Parent = gachaCard
 	UITheme.addCorner(gachaIncomeBadge, 12)
 
@@ -857,24 +836,22 @@ function HUD.create(player: Player): HUDInstance
 	gachaIncomeLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 	gachaIncomeLabel.Font = UITheme.FontBold
 	gachaIncomeLabel.TextSize = 15
-	gachaIncomeLabel.ZIndex = 112
 	gachaIncomeLabel.Parent = gachaIncomeBadge
 
 	local gachaCollectBtn = Instance.new("TextButton")
-	gachaCollectBtn.Size = UDim2.new(1, -40, 0, 46)
-	gachaCollectBtn.Position = UDim2.new(0.5, 0, 1, -20)
+	gachaCollectBtn.Size = UDim2.new(1, -40, 0, 48)
+	gachaCollectBtn.Position = UDim2.new(0.5, 0, 1, -18)
 	gachaCollectBtn.AnchorPoint = Vector2.new(0.5, 1)
-	gachaCollectBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 75)
+	gachaCollectBtn.BackgroundColor3 = UITheme.Colors.GreenSuccess
 	gachaCollectBtn.Text = "¡GENIAL!"
 	gachaCollectBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	gachaCollectBtn.Font = UITheme.FontTitle
 	gachaCollectBtn.TextSize = 18
 	gachaCollectBtn.AutoButtonColor = false
-	gachaCollectBtn.ZIndex = 115
 	gachaCollectBtn.Parent = gachaCard
 	UITheme.addCorner(gachaCollectBtn, 14)
-	UITheme.addStroke(gachaCollectBtn, Color3.fromRGB(20, 110, 40), 2.5)
-	UITheme.addGradient(gachaCollectBtn, Color3.fromRGB(60, 215, 95), Color3.fromRGB(30, 150, 60))
+	UITheme.addStroke(gachaCollectBtn, UITheme.Colors.GreenSuccessDark, 2.5)
+	UITheme.addGradient(gachaCollectBtn, Color3.fromRGB(65, 225, 100), UITheme.Colors.GreenSuccessDark)
 	UIEffects.applyButtonBounce(gachaCollectBtn)
 
 	gachaCollectBtn.MouseButton1Click:Connect(function()
@@ -897,11 +874,12 @@ function HUD.create(player: Player): HUDInstance
 		gachaIncomeLabel.Text = NumberFormat.formatIncome(income)
 
 		gachaOverlay.Visible = true
-		gachaOverlay.BackgroundTransparency = 0.2
+		gachaOverlay.BackgroundTransparency = 0.25
 		UIEffects.openModal(gachaCard)
+		UIEffects.shakeObject(gachaCard, 0.25, 6)
 
 		if plant.rarityId >= 4 then
-			UIEffects.playSound("GachaRare")
+			UIEffects.playSound("Fanfare")
 		else
 			UIEffects.playSound("EggCrack")
 		end
@@ -917,10 +895,9 @@ function HUD.create(player: Player): HUDInstance
 		statCoinsVal.Text = NumberFormat.formatMoney(coins)
 		statIncomeVal.Text = NumberFormat.formatIncome(income)
 
-		-- Color del botón de huevo según asequibilidad
 		buyEggBtn.BackgroundColor3 = coins >= GameConfig.EGG_COST
-			and Color3.fromRGB(40, 180, 70)
-			or Color3.fromRGB(75, 80, 95)
+			and UITheme.Colors.GreenSuccess
+			or Color3.fromRGB(75, 85, 105)
 	end
 
 	self.updateFull = function(data: PlayerData & { incomePerSecond: number? })
@@ -949,12 +926,12 @@ function HUD.create(player: Player): HUDInstance
 				subLbl.Text = string.format("+$%s/s", NumberFormat.formatMoney(incomeVal):gsub("%$", ""))
 				subLbl.TextColor3 = Color3.fromRGB(255, 255, 200)
 			else
-				card.BackgroundColor3 = Color3.fromRGB(30, 36, 52)
+				card.BackgroundColor3 = Color3.fromRGB(42, 50, 76)
 				iconLbl.Text = "🪴"
 				nameLbl.Text = "Vacío"
-				nameLbl.TextColor3 = Color3.fromRGB(160, 170, 190)
+				nameLbl.TextColor3 = Color3.fromRGB(190, 205, 230)
 				subLbl.Text = "(Toca para +)"
-				subLbl.TextColor3 = Color3.fromRGB(110, 120, 140)
+				subLbl.TextColor3 = UITheme.Colors.TextMuted
 			end
 		end
 
@@ -974,9 +951,9 @@ function HUD.create(player: Player): HUDInstance
 			local icon = UITheme.getSpeciesIcon(plant.speciesName)
 
 			local itemCard = Instance.new("Frame")
-			itemCard.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
+			itemCard.BackgroundColor3 = Color3.fromRGB(38, 46, 70)
 			itemCard.Parent = invScroll
-			UITheme.addCorner(itemCard, 12)
+			UITheme.addCorner(itemCard, 14)
 			UITheme.addStroke(itemCard, style.strokeColor, 2)
 
 			local itemIcon = Instance.new("TextLabel")
@@ -984,7 +961,7 @@ function HUD.create(player: Player): HUDInstance
 			itemIcon.Position = UDim2.new(0, 0, 0.04, 0)
 			itemIcon.BackgroundTransparency = 1
 			itemIcon.Text = icon
-			itemIcon.TextSize = 28
+			itemIcon.TextSize = 30
 			itemIcon.Parent = itemCard
 
 			local itemName = Instance.new("TextLabel")
@@ -994,7 +971,7 @@ function HUD.create(player: Player): HUDInstance
 			itemName.Text = plant.speciesName
 			itemName.TextColor3 = Color3.fromRGB(255, 255, 255)
 			itemName.Font = UITheme.FontBold
-			itemName.TextSize = 10
+			itemName.TextSize = 11
 			itemName.Parent = itemCard
 
 			local itemIncome = Instance.new("TextLabel")
@@ -1002,19 +979,19 @@ function HUD.create(player: Player): HUDInstance
 			itemIncome.Position = UDim2.new(0, 2, 0.62, 0)
 			itemIncome.BackgroundTransparency = 1
 			itemIncome.Text = NumberFormat.formatIncome(income)
-			itemIncome.TextColor3 = Color3.fromRGB(120, 255, 120)
+			itemIncome.TextColor3 = Color3.fromRGB(100, 255, 120)
 			itemIncome.Font = UITheme.FontBold
-			itemIncome.TextSize = 9
+			itemIncome.TextSize = 10
 			itemIncome.Parent = itemCard
 
 			local plantBtn = Instance.new("TextButton")
-			plantBtn.Size = UDim2.new(1, -8, 0, 18)
-			plantBtn.Position = UDim2.new(0, 4, 1, -22)
-			plantBtn.BackgroundColor3 = Color3.fromRGB(40, 170, 70)
+			plantBtn.Size = UDim2.new(1, -10, 0, 20)
+			plantBtn.Position = UDim2.new(0, 5, 1, -24)
+			plantBtn.BackgroundColor3 = UITheme.Colors.GreenSuccess
 			plantBtn.Text = "PLANTAR"
 			plantBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 			plantBtn.Font = UITheme.FontTitle
-			plantBtn.TextSize = 9
+			plantBtn.TextSize = 10
 			plantBtn.AutoButtonColor = false
 			plantBtn.Parent = itemCard
 			UITheme.addCorner(plantBtn, 6)
@@ -1033,7 +1010,7 @@ function HUD.create(player: Player): HUDInstance
 					end
 				end
 				UIEffects.playSound("Error")
-				UIEffects.spawnFloatingText(screen, "¡El jardín está lleno!", UDim2.new(0.5, 0, 0.5, 0), Color3.fromRGB(255, 80, 80), 22)
+				UIEffects.spawnFloatingText(screen, "¡El jardín está lleno!", UDim2.new(0.5, 0, 0.5, 0), UITheme.Colors.RedDanger, 22)
 			end)
 
 			table.insert(inventoryCards, itemCard)

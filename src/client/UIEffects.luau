@@ -5,13 +5,14 @@ local SoundService = game:GetService("SoundService")
 local UIEffects = {}
 
 -- Audio asset IDs for satisfying feedback
-local SOUND_IDS = {
+local SOUND_IDS: { [string]: string } = {
 	Click = "rbxassetid://6895079853",
 	Pop = "rbxassetid://9069609200",
+	CoinCollect = "rbxassetid://5153734608",
 	EggCrack = "rbxassetid://9069608998",
-	GachaRare = "rbxassetid://9069608552",
+	Fanfare = "rbxassetid://9069608552",
 	Error = "rbxassetid://9069608823",
-	CoinCollect = "rbxassetid://6518811702",
+	Equip = "rbxassetid://6034287525",
 }
 
 local soundsFolder: Folder? = nil
@@ -32,7 +33,7 @@ local function getSound(name: string): Sound?
 		s = Instance.new("Sound")
 		s.Name = name
 		s.SoundId = SOUND_IDS[name]
-		s.Volume = 0.5
+		s.Volume = 0.6
 		s.Parent = soundsFolder
 	end
 	return s
@@ -70,6 +71,7 @@ function UIEffects.applyButtonBounce(button: GuiButton, baseScale: number?)
 			{ Scale = scale * 1.07 }
 		)
 		hoverTween:Play()
+		UIEffects.playSound("Pop")
 	end)
 
 	button.MouseLeave:Connect(function()
@@ -127,7 +129,7 @@ function UIEffects.openModal(modalFrame: GuiObject, backdrop: GuiObject?)
 		TweenService:Create(
 			backdrop,
 			TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-			{ BackgroundTransparency = 0.45 }
+			{ BackgroundTransparency = 0.55 }
 		):Play()
 	end
 
@@ -175,10 +177,25 @@ function UIEffects.closeModal(modalFrame: GuiObject, backdrop: GuiObject?, onCom
 	end)
 end
 
+-- Shake animation for Gacha egg suspense
+function UIEffects.shakeObject(object: GuiObject, duration: number, intensity: number)
+	task.spawn(function()
+		local originalPos = object.Position
+		local startTime = os.clock()
+		while (os.clock() - startTime) < duration do
+			local offsetX = (math.random() - 0.5) * intensity * 2
+			local offsetY = (math.random() - 0.5) * intensity * 2
+			object.Position = UDim2.new(originalPos.X.Scale, originalPos.X.Offset + offsetX, originalPos.Y.Scale, originalPos.Y.Offset + offsetY)
+			task.wait(0.04)
+		end
+		object.Position = originalPos
+	end)
+end
+
 -- Spawns floating animated +$ text popping upward
 function UIEffects.spawnFloatingText(parent: Instance, text: string, startPos: UDim2, color: Color3, fontSize: number?)
 	local label = Instance.new("TextLabel")
-	label.Size = UDim2.new(0, 180, 0, 36)
+	label.Size = UDim2.new(0, 200, 0, 36)
 	label.Position = startPos
 	label.AnchorPoint = Vector2.new(0.5, 0.5)
 	label.BackgroundTransparency = 1
@@ -186,7 +203,7 @@ function UIEffects.spawnFloatingText(parent: Instance, text: string, startPos: U
 	label.TextColor3 = color
 	label.Font = Enum.Font.GothamBlack
 	label.TextSize = fontSize or 22
-	label.TextStrokeTransparency = 0.3
+	label.TextStrokeTransparency = 0.2
 	label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
 	label.ZIndex = 50
 	label.Parent = parent
