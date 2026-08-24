@@ -1,6 +1,8 @@
 --!strict
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local SoundService = game:GetService("SoundService")
+local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Shared.GameConfig)
@@ -22,6 +24,14 @@ export type HUDInstance = {
 }
 
 local HUD = {}
+
+-- Helper to apply volume to SoundService groups
+local function applyGroupVolume(groupName: string, vol: number)
+	local soundGroup = SoundService:FindFirstChild(groupName)
+	if soundGroup and soundGroup:IsA("SoundGroup") then
+		soundGroup.Volume = vol
+	end
+end
 
 function HUD.create(player: Player): HUDInstance
 	local self: HUDInstance = {
@@ -118,7 +128,31 @@ function HUD.create(player: Player): HUDInstance
 	incomeLabel.TextSize = 12
 	incomeLabel.Parent = incomeBadge
 
-	-- ── 2. TELÓN DE FONDO (BACKDROP PARA MODALES) ─────────────────────────────
+	-- ── 2. BOTÓN DE CONFIGURACIÓN (TOP RIGHT GEAR ⚙️) ──────────────────────────
+
+	local gearBtn = Instance.new("ImageButton")
+	gearBtn.Size = UDim2.new(0, 48, 0, 48)
+	gearBtn.Position = UDim2.new(1, -64, 0, 35)
+	gearBtn.BackgroundColor3 = Color3.fromRGB(28, 34, 52)
+	gearBtn.Image = "rbxassetid://17368089841"
+	gearBtn.AutoButtonColor = false
+	gearBtn.BorderSizePixel = 0
+	gearBtn.Parent = screen
+	UITheme.addCorner(gearBtn, 14)
+	UITheme.addStroke(gearBtn, Color3.fromRGB(70, 85, 125), 2.5)
+	UITheme.addGradient(gearBtn, Color3.fromRGB(42, 50, 78), Color3.fromRGB(24, 28, 44))
+	UIEffects.applyButtonBounce(gearBtn)
+
+	-- Fallback si el ID de imagen tarda en cargar
+	local gearIconLbl = Instance.new("TextLabel")
+	gearIconLbl.Size = UDim2.new(1, 0, 1, 0)
+	gearIconLbl.BackgroundTransparency = 1
+	gearIconLbl.Text = "⚙️"
+	gearIconLbl.TextSize = 22
+	gearIconLbl.Visible = false
+	gearIconLbl.Parent = gearBtn
+
+	-- ── 3. TELÓN DE FONDO (BACKDROP PARA MODALES) ─────────────────────────────
 
 	local modalBackdrop = Instance.new("TextButton")
 	modalBackdrop.Size = UDim2.new(1, 0, 1, 0)
@@ -154,7 +188,7 @@ function HUD.create(player: Player): HUDInstance
 		UIEffects.openModal(newModal, modalBackdrop)
 	end
 
-	-- ── 3. BARRA DE NAVEGACIÓN DOCK INFERIOR (ESTILO SIMULATOR 2026) ───────────
+	-- ── 4. BARRA DE NAVEGACIÓN DOCK INFERIOR (ESTILO SIMULATOR 2026) ───────────
 
 	local dockFrame = Instance.new("Frame")
 	dockFrame.Size = UDim2.new(0, 390, 0, 72)
@@ -211,7 +245,7 @@ function HUD.create(player: Player): HUDInstance
 	local invDockBtn = createDockButton("🎒", "MOCHILA", Color3.fromRGB(80, 160, 255), Color3.fromRGB(30, 90, 210), Color3.fromRGB(15, 55, 140))
 	local statsDockBtn = createDockButton("🏆", "STATS", Color3.fromRGB(210, 100, 255), Color3.fromRGB(130, 40, 200), Color3.fromRGB(85, 20, 135))
 
-	-- ── 4. VENTANA MODAL BASE (HELPER) ────────────────────────────────────────
+	-- ── 5. VENTANA MODAL BASE (HELPER) ────────────────────────────────────────
 
 	local function createModalFrame(titleText: string, width: number, height: number): (Frame, TextButton)
 		local modal = Instance.new("Frame")
@@ -253,7 +287,7 @@ function HUD.create(player: Player): HUDInstance
 		closeBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 60)
 		closeBtn.Text = "✕"
 		closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-		closeBtn.Font = UITheme.FontBlack or Enum.Font.GothamBold
+		closeBtn.Font = UITheme.FontBold
 		closeBtn.TextSize = 16
 		closeBtn.AutoButtonColor = false
 		closeBtn.Parent = header
@@ -266,7 +300,145 @@ function HUD.create(player: Player): HUDInstance
 		return modal, closeBtn
 	end
 
-	-- ── 5. MODAL: TIENDA DE HUEVOS (EGG SHOP) ──────────────────────────────────
+	-- ── 6. MODAL: CONFIGURACIÓN / SETTINGS (SLIDERS AUDIO) ─────────────────────
+
+	local settingsModal = createModalFrame("⚙️ CONFIGURACIÓN", 360, 340)
+
+	local settingsContainer = Instance.new("Frame")
+	settingsContainer.Size = UDim2.new(1, -24, 1, -66)
+	settingsContainer.Position = UDim2.new(0, 12, 0, 56)
+	settingsContainer.BackgroundTransparency = 1
+	settingsContainer.Parent = settingsModal
+
+	local settingsLayout = Instance.new("UIListLayout")
+	settingsLayout.Padding = UDim.new(0, 12)
+	settingsLayout.Parent = settingsContainer
+
+	-- Helper para crear sliders interactivos y modernos
+	local function createSlider(parent: Instance, icon: string, title: string, initialVol: number, onChange: (number) -> ())
+		local card = Instance.new("Frame")
+		card.Size = UDim2.new(1, 0, 0, 64)
+		card.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
+		card.Parent = parent
+		UITheme.addCorner(card, 12)
+		UITheme.addStroke(card, Color3.fromRGB(60, 70, 100), 1.5)
+
+		local iconLbl = Instance.new("TextLabel")
+		iconLbl.Size = UDim2.new(0, 36, 0, 30)
+		iconLbl.Position = UDim2.new(0, 10, 0, 4)
+		iconLbl.BackgroundTransparency = 1
+		iconLbl.Text = icon
+		iconLbl.TextSize = 20
+		iconLbl.Parent = card
+
+		local titleLbl = Instance.new("TextLabel")
+		titleLbl.Size = UDim2.new(0.5, 0, 0, 30)
+		titleLbl.Position = UDim2.new(0, 48, 0, 4)
+		titleLbl.BackgroundTransparency = 1
+		titleLbl.Text = title
+		titleLbl.TextColor3 = Color3.fromRGB(220, 230, 255)
+		titleLbl.Font = UITheme.FontBold
+		titleLbl.TextSize = 13
+		titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+		titleLbl.Parent = card
+
+		local valLbl = Instance.new("TextLabel")
+		valLbl.Size = UDim2.new(0.3, 0, 0, 30)
+		valLbl.Position = UDim2.new(1, -12, 0, 4)
+		valLbl.AnchorPoint = Vector2.new(1, 0)
+		valLbl.BackgroundTransparency = 1
+		valLbl.Text = math.floor(initialVol * 100) .. "%"
+		valLbl.TextColor3 = Color3.fromRGB(255, 220, 80)
+		valLbl.Font = UITheme.FontTitle
+		valLbl.TextSize = 13
+		valLbl.TextXAlignment = Enum.TextXAlignment.Right
+		valLbl.Parent = card
+
+		-- Barra del Slider
+		local track = Instance.new("TextButton")
+		track.Size = UDim2.new(1, -24, 0, 16)
+		track.Position = UDim2.new(0, 12, 1, -22)
+		track.BackgroundColor3 = Color3.fromRGB(16, 18, 28)
+		track.Text = ""
+		track.AutoButtonColor = false
+		track.Parent = card
+		UITheme.addCorner(track, 8)
+		UITheme.addStroke(track, Color3.fromRGB(45, 52, 75), 1.5)
+
+		local fill = Instance.new("Frame")
+		fill.Size = UDim2.new(initialVol, 0, 1, 0)
+		fill.BackgroundColor3 = Color3.fromRGB(60, 170, 255)
+		fill.BorderSizePixel = 0
+		fill.Parent = track
+		UITheme.addCorner(fill, 8)
+		UITheme.addGradient(fill, Color3.fromRGB(90, 200, 255), Color3.fromRGB(30, 120, 240))
+
+		local knob = Instance.new("Frame")
+		knob.Size = UDim2.new(0, 22, 0, 22)
+		knob.Position = UDim2.new(initialVol, 0, 0.5, 0)
+		knob.AnchorPoint = Vector2.new(0.5, 0.5)
+		knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		knob.Parent = track
+		UITheme.addCorner(knob, 11)
+		UITheme.addStroke(knob, Color3.fromRGB(30, 100, 220), 2)
+
+		local dragging = false
+
+		local function updateFromInput(inputPos: Vector2)
+			local trackAbsPos = track.AbsolutePosition.X
+			local trackAbsSize = track.AbsoluteSize.X
+			local relX = math.clamp((inputPos.X - trackAbsPos) / trackAbsSize, 0, 1)
+
+			fill.Size = UDim2.new(relX, 0, 1, 0)
+			knob.Position = UDim2.new(relX, 0, 0.5, 0)
+			valLbl.Text = math.floor(relX * 100) .. "%"
+			onChange(relX)
+		end
+
+		track.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = true
+				updateFromInput(Vector2.new(input.Position.X, input.Position.Y))
+			end
+		end)
+
+		UserInputService.InputChanged:Connect(function(input)
+			if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+				updateFromInput(Vector2.new(input.Position.X, input.Position.Y))
+			end
+		end)
+
+		UserInputService.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = false
+			end
+		end)
+	end
+
+	-- Slider General
+	createSlider(settingsContainer, "🔊", "Volumen General", 1.0, function(v)
+		for _, child in SoundService:GetChildren() do
+			if child:IsA("SoundGroup") then
+				child.Volume = v
+			end
+		end
+	end)
+
+	-- Slider Música
+	createSlider(settingsContainer, "🎵", "Música de Fondo", 1.0, function(v)
+		applyGroupVolume("Music", v)
+	end)
+
+	-- Slider Efectos
+	createSlider(settingsContainer, "✨", "Efectos de Sonido", 1.0, function(v)
+		applyGroupVolume("Effects", v)
+	end)
+
+	gearBtn.MouseButton1Click:Connect(function()
+		switchModal(settingsModal)
+	end)
+
+	-- ── 7. MODAL: TIENDA DE HUEVOS (EGG SHOP) ──────────────────────────────────
 
 	local eggModal = createModalFrame("🥚 TIENDA DE HUEVOS", 380, 420)
 
@@ -375,7 +547,7 @@ function HUD.create(player: Player): HUDInstance
 		switchModal(eggModal)
 	end)
 
-	-- ── 6. MODAL: JARDÍN (PLOT MACETAS) ────────────────────────────────────────
+	-- ── 8. MODAL: JARDÍN (PLOT MACETAS) ────────────────────────────────────────
 
 	local plotModal = createModalFrame("🌱 MI JARDÍN (MACETAS)", 440, 420)
 
@@ -456,7 +628,7 @@ function HUD.create(player: Player): HUDInstance
 		switchModal(plotModal)
 	end)
 
-	-- ── 7. MODAL: MOCHILA / INVENTARIO ─────────────────────────────────────────
+	-- ── 9. MODAL: MOCHILA / INVENTARIO ─────────────────────────────────────────
 
 	local invModal = createModalFrame("🎒 MOCHILA DE FRUTAS", 440, 450)
 
@@ -534,7 +706,7 @@ function HUD.create(player: Player): HUDInstance
 		switchModal(invModal)
 	end)
 
-	-- ── 8. MODAL: ESTADÍSTICAS (STATS) ────────────────────────────────────────
+	-- ── 10. MODAL: ESTADÍSTICAS (STATS) ────────────────────────────────────────
 
 	local statsModal = createModalFrame("🏆 TUS ESTADÍSTICAS", 380, 360)
 
@@ -598,7 +770,7 @@ function HUD.create(player: Player): HUDInstance
 		switchModal(statsModal)
 	end)
 
-	-- ── 9. CINEMÁTICA DE APERTURA DE HUEVOS (GACHA REVEAL MODAL) ───────────────
+	-- ── 11. CINEMÁTICA DE APERTURA DE HUEVOS (GACHA REVEAL MODAL) ──────────────
 
 	local gachaOverlay = Instance.new("Frame")
 	gachaOverlay.Size = UDim2.new(1, 0, 1, 0)
@@ -735,7 +907,7 @@ function HUD.create(player: Player): HUDInstance
 		end
 	end
 
-	-- ── 10. MÉTODOS DE ACTUALIZACIÓN DEL ESTADO ─────────────────────────────────
+	-- ── 12. MÉTODOS DE ACTUALIZACIÓN DEL ESTADO ────────────────────────────────
 
 	self.updateCoins = function(coins: number, income: number)
 		currentCoins = coins

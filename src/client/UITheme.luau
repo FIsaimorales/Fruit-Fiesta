@@ -1,8 +1,18 @@
 --!strict
 local UITheme = {}
 
+export type RarityVisual = {
+	name: string,
+	gradientTop: Color3,
+	gradientBottom: Color3,
+	strokeColor: Color3,
+	textColor: Color3,
+	badgeColor: Color3,
+	particleColor: ColorSequence,
+}
+
 -- Emojis and visual identifiers for each fruit species
-UITheme.SPECIES_ICONS: { [string]: string } = {
+local SPECIES_ICONS: { [string]: string } = {
 	["Manzana"] = "🍎",
 	["Banana"] = "🍌",
 	["Naranja"] = "🍊",
@@ -17,17 +27,7 @@ UITheme.SPECIES_ICONS: { [string]: string } = {
 	["Fruta Cósmica"] = "🌌",
 }
 
-export type RarityVisual = {
-	name: string,
-	gradientTop: Color3,
-	gradientBottom: Color3,
-	strokeColor: Color3,
-	textColor: Color3,
-	badgeColor: Color3,
-	particleColor: ColorSequence,
-}
-
-UITheme.RARITY_STYLES: { [number]: RarityVisual } = {
+local RARITY_STYLES: { [number]: RarityVisual } = {
 	[1] = { -- Común (Slate / Crisp White-Gray)
 		name = "Común",
 		gradientTop = Color3.fromRGB(240, 240, 245),
@@ -84,6 +84,9 @@ UITheme.RARITY_STYLES: { [number]: RarityVisual } = {
 	},
 }
 
+UITheme.SPECIES_ICONS = SPECIES_ICONS
+UITheme.RARITY_STYLES = RARITY_STYLES
+
 -- Modern clean fonts
 UITheme.FontTitle = Enum.Font.GothamBlack
 UITheme.FontBold = Enum.Font.GothamBold
@@ -92,11 +95,11 @@ UITheme.FontRegular = Enum.Font.Gotham
 
 -- UI Helpers
 function UITheme.getSpeciesIcon(name: string): string
-	return UITheme.SPECIES_ICONS[name] or "🌱"
+	return SPECIES_ICONS[name] or "🌱"
 end
 
 function UITheme.getRarityStyle(rarityId: number): RarityVisual
-	return UITheme.RARITY_STYLES[rarityId] or UITheme.RARITY_STYLES[1]
+	return RARITY_STYLES[rarityId] or RARITY_STYLES[1]
 end
 
 -- Adds rounded corners to an instance
