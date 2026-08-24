@@ -1,8 +1,9 @@
+--!strict
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
 local player = Players.LocalPlayer
-local remotes = ReplicatedStorage:WaitForChild("Remotes", 10)
+local remotes = ReplicatedStorage:WaitForChild("Remotes", 10) :: Folder
 
 if not remotes then
 	error("[Client] Remotes folder not found in ReplicatedStorage")
@@ -10,21 +11,13 @@ end
 
 local HUD = require(script.HUD)
 
--- Current player state (updated by server push)
-local playerData = {
-	coins = 0,
-	plants = {},
-	plot = {},
-	rebirths = 0,
-	incomePerSecond = 0,
-}
-
 -- ── Remote references ─────────────────────────────────────────────────────────
 
-local updatePlayerData: RemoteEvent = remotes:WaitForChild("UpdatePlayerData")
-local openEgg: RemoteEvent = remotes:WaitForChild("OpenEgg")
-local placePlant: RemoteEvent = remotes:WaitForChild("PlacePlant")
-local removePlant: RemoteEvent = remotes:WaitForChild("RemovePlant")
+local updatePlayerData = remotes:WaitForChild("UpdatePlayerData") :: RemoteEvent
+local updateCoins = remotes:WaitForChild("UpdateCoins") :: RemoteEvent
+local openEgg = remotes:WaitForChild("OpenEgg") :: RemoteEvent
+local placePlant = remotes:WaitForChild("PlacePlant") :: RemoteEvent
+local removePlant = remotes:WaitForChild("RemovePlant") :: RemoteEvent
 
 -- ── Init HUD ──────────────────────────────────────────────────────────────────
 
@@ -45,9 +38,14 @@ end
 
 -- ── Receive server state ──────────────────────────────────────────────────────
 
+-- Full player state update (on join, inventory changes, egg open, plot change)
 updatePlayerData.OnClientEvent:Connect(function(data)
-	playerData = data
-	hud.update(data)
+	hud.updateFull(data)
 end)
 
-print("[Client] FruitGarden initialized")
+-- Lightweight coin/income update (1-second tick)
+updateCoins.OnClientEvent:Connect(function(coins: number, income: number)
+	hud.updateCoins(coins, income)
+end)
+
+print("[Client] FruitGarden initialized with network optimizations.")

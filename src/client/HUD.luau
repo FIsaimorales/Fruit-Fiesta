@@ -1,22 +1,36 @@
+--!strict
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local GameConfig = require(game.ReplicatedStorage.Shared.GameConfig)
-local NumberFormat = require(game.ReplicatedStorage.Shared.NumberFormat)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local GameConfig = require(ReplicatedStorage.Shared.GameConfig)
+local NumberFormat = require(ReplicatedStorage.Shared.NumberFormat)
+
+export type Plant = GameConfig.Plant
+export type PlayerData = GameConfig.PlayerData
+
+export type HUDInstance = {
+	onOpenEgg: (() -> ())?,
+	onPlacePlant: ((inventoryIndex: number, slotIndex: number) -> ())?,
+	onRemovePlant: ((slotIndex: number) -> ())?,
+	updateFull: (data: PlayerData & { incomePerSecond: number? }) -> (),
+	updateCoins: (coins: number, income: number) -> (),
+}
 
 local HUD = {}
 
 -- Rarity colors for UI
 local RARITY_COLORS = {
-	Color3.fromRGB(200, 200, 200),  -- Común (gray)
-	Color3.fromRGB(100, 200, 100),  -- Poco común (green)
-	Color3.fromRGB(80, 140, 255),   -- Raro (blue)
-	Color3.fromRGB(160, 80, 255),   -- Épico (purple)
-	Color3.fromRGB(255, 170, 40),   -- Legendario (gold)
-	Color3.fromRGB(255, 80, 80),    -- Mítico (red)
+	Color3.fromRGB(190, 190, 190), -- 1: Común (gray)
+	Color3.fromRGB(100, 210, 100), -- 2: Poco común (green)
+	Color3.fromRGB(70, 150, 255),  -- 3: Raro (blue)
+	Color3.fromRGB(180, 80, 255),  -- 4: Épico (purple)
+	Color3.fromRGB(255, 180, 40),  -- 5: Legendario (gold)
+	Color3.fromRGB(255, 60, 60),   -- 6: Mítico (red)
 }
 
 local function rarityColor(id: number): Color3
-	return RARITY_COLORS[id] or Color3.new(1, 1, 1)
+	return RARITY_COLORS[id] or Color3.fromRGB(255, 255, 255)
 end
 
 local function makeLabel(parent: Instance, text: string, size: UDim2, pos: UDim2, fontSize: number, bold: boolean?): TextLabel
@@ -25,7 +39,7 @@ local function makeLabel(parent: Instance, text: string, size: UDim2, pos: UDim2
 	lbl.Position = pos
 	lbl.BackgroundTransparency = 1
 	lbl.Text = text
-	lbl.TextColor3 = Color3.new(1, 1, 1)
+	lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
 	lbl.TextScaled = false
 	lbl.Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham
 	lbl.TextSize = fontSize
@@ -40,9 +54,9 @@ local function makeButton(parent: Instance, text: string, size: UDim2, pos: UDim
 	btn.Position = pos
 	btn.BackgroundColor3 = color
 	btn.Text = text
-	btn.TextColor3 = Color3.new(1, 1, 1)
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 16
+	btn.TextSize = 14
 	btn.AutoButtonColor = true
 	btn.Parent = parent
 
@@ -53,15 +67,22 @@ local function makeButton(parent: Instance, text: string, size: UDim2, pos: UDim
 	return btn
 end
 
--- ── Build GUI ─────────────────────────────────────────────────────────────────
+function HUD.create(player: Player): HUDInstance
+	local self: HUDInstance = {
+		onOpenEgg = nil,
+		onPlacePlant = nil,
+		onRemovePlant = nil,
+		updateFull = function() end,
+		updateCoins = function() end,
+	}
 
-function HUD.create(player: Player)
-	local self = {}
-	self.onOpenEgg = nil :: (() -> ())?
-	self.onPlacePlant = nil :: ((number, number) -> ())?
-	self.onRemovePlant = nil :: ((number) -> ())?
+	local playerGui = player:WaitForChild("PlayerGui") :: PlayerGui
 
-	local playerGui = player:WaitForChild("PlayerGui")
+	-- Limpiar HUD anterior si existía
+	local existing = playerGui:FindFirstChild("FruitGardenHUD")
+	if existing then
+		existing:Destroy()
+	end
 
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "FruitGardenHUD"
@@ -70,40 +91,76 @@ function HUD.create(player: Player)
 	screen.Parent = playerGui
 
 	-- ── Top bar ──────────────────────────────────────────────────────────────
-
 	local topBar = Instance.new("Frame")
-	topBar.Size = UDim2.new(1, 0, 0, 60)
+	topBar.Size = UDim2.new(1, 0, 0, 56)
 	topBar.Position = UDim2.new(0, 0, 0, 0)
-	topBar.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-	topBar.BackgroundTransparency = 0.2
+	topBar.BackgroundColor3 = Color3.fromRGB(18, 20, 28)
+	topBar.BackgroundTransparency = 0.15
 	topBar.BorderSizePixel = 0
 	topBar.Parent = screen
 
-	local coinsLabel = makeLabel(topBar, "$0", UDim2.new(0.5, 0, 1, 0), UDim2.new(0.25, 0, 0, 0), 28, true)
-	local incomeLabel = makeLabel(topBar, "+$0/s", UDim2.new(0.25, 0, 1, 0), UDim2.new(0.5, 0, 0, 0), 16)
-	incomeLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+	local coinsLabel = makeLabel(topBar, "$0", UDim2.new(0.4, 0, 0.6, 0), UDim2.new(0.3, 0, 0.05, 0), 24, true)
+	coinsLabel.TextColor3 = Color3.fromRGB(255, 220, 80)
+
+	local incomeLabel = makeLabel(topBar, "+$0/s", UDim2.new(0.4, 0, 0.35, 0), UDim2.new(0.3, 0, 0.6, 0), 13, false)
+	incomeLabel.TextColor3 = Color3.fromRGB(120, 255, 120)
 
 	-- ── Egg button ───────────────────────────────────────────────────────────
+	local currentCoins = 0
 
 	local eggBtn = makeButton(
 		screen,
 		"🥚 Abrir Huevo\n$" .. GameConfig.EGG_COST,
-		UDim2.new(0, 150, 0, 60),
-		UDim2.new(0.5, -75, 1, -80),
-		Color3.fromRGB(60, 120, 200)
+		UDim2.new(0, 150, 0, 55),
+		UDim2.new(0.5, -75, 1, -75),
+		Color3.fromRGB(50, 110, 200)
 	)
 
+	-- ── Popup notification system ─────────────────────────────────────────────
+	local function showPopup(text: string, color: Color3)
+		local popup = Instance.new("TextLabel")
+		popup.Size = UDim2.new(0, 240, 0, 36)
+		popup.Position = UDim2.new(0.5, -120, 0.45, 0)
+		popup.BackgroundTransparency = 1
+		popup.Text = text
+		popup.TextColor3 = color
+		popup.Font = Enum.Font.GothamBold
+		popup.TextSize = 20
+		popup.TextStrokeTransparency = 0.4
+		popup.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+		popup.Parent = screen
+
+		local tween = TweenService:Create(
+			popup,
+			TweenInfo.new(1.0, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{
+				Position = UDim2.new(0.5, -120, 0.35, 0),
+				TextTransparency = 1,
+				TextStrokeTransparency = 1,
+			}
+		)
+		tween:Play()
+		tween.Completed:Connect(function()
+			popup:Destroy()
+		end)
+	end
+
 	eggBtn.MouseButton1Click:Connect(function()
-		if self.onOpenEgg then self.onOpenEgg() end
+		if currentCoins < GameConfig.EGG_COST then
+			showPopup("¡Monedas insuficientes!", Color3.fromRGB(255, 100, 100))
+			return
+		end
+		if self.onOpenEgg then
+			self.onOpenEgg()
+		end
 	end)
 
 	-- ── Plot grid ────────────────────────────────────────────────────────────
-
 	local plotFrame = Instance.new("Frame")
-	plotFrame.Size = UDim2.new(0, 360, 0, 180)
-	plotFrame.Position = UDim2.new(0, 10, 0.5, -90)
-	plotFrame.BackgroundColor3 = Color3.fromRGB(30, 60, 30)
-	plotFrame.BackgroundTransparency = 0.3
+	plotFrame.Size = UDim2.new(0, 340, 0, 160)
+	plotFrame.Position = UDim2.new(0, 15, 0.5, -80)
+	plotFrame.BackgroundColor3 = Color3.fromRGB(25, 45, 25)
+	plotFrame.BackgroundTransparency = 0.25
 	plotFrame.BorderSizePixel = 0
 	plotFrame.Parent = screen
 
@@ -111,8 +168,8 @@ function HUD.create(player: Player)
 	plotCorner.CornerRadius = UDim.new(0, 10)
 	plotCorner.Parent = plotFrame
 
-	local plotTitle = makeLabel(plotFrame, "Plot (macetas)", UDim2.new(1, 0, 0, 24), UDim2.new(0, 0, 0, 0), 14, true)
-	plotTitle.TextColor3 = Color3.fromRGB(200, 255, 200)
+	local plotTitle = makeLabel(plotFrame, "🌱 Jardín (Macetas)", UDim2.new(1, 0, 0, 22), UDim2.new(0, 0, 0, 2), 13, true)
+	plotTitle.TextColor3 = Color3.fromRGB(180, 255, 180)
 
 	local slotButtons: { TextButton } = {}
 
@@ -123,15 +180,14 @@ function HUD.create(player: Player)
 		local slotBtn = makeButton(
 			plotFrame,
 			tostring(i),
-			UDim2.new(0, 64, 0, 64),
-			UDim2.new(0, 8 + col * 70, 0, 28 + row * 72),
-			Color3.fromRGB(50, 90, 50)
+			UDim2.new(0, 60, 0, 56),
+			UDim2.new(0, 8 + col * 66, 0, 28 + row * 62),
+			Color3.fromRGB(40, 75, 40)
 		)
-		slotBtn.TextSize = 11
+		slotBtn.TextSize = 10
 
 		local slotIndex = i
 		slotBtn.MouseButton1Click:Connect(function()
-			-- If slot is occupied → remove plant back to inventory
 			if self.onRemovePlant then
 				self.onRemovePlant(slotIndex)
 			end
@@ -141,14 +197,13 @@ function HUD.create(player: Player)
 	end
 
 	-- ── Inventory panel ───────────────────────────────────────────────────────
-
 	local invFrame = Instance.new("ScrollingFrame")
-	invFrame.Size = UDim2.new(0, 200, 0.5, -40)
-	invFrame.Position = UDim2.new(1, -210, 0, 70)
-	invFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
+	invFrame.Size = UDim2.new(0, 210, 0.55, -40)
+	invFrame.Position = UDim2.new(1, -225, 0, 65)
+	invFrame.BackgroundColor3 = Color3.fromRGB(20, 22, 32)
 	invFrame.BackgroundTransparency = 0.2
 	invFrame.BorderSizePixel = 0
-	invFrame.ScrollBarThickness = 4
+	invFrame.ScrollBarThickness = 5
 	invFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 	invFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	invFrame.Parent = screen
@@ -157,8 +212,8 @@ function HUD.create(player: Player)
 	invCorner.CornerRadius = UDim.new(0, 10)
 	invCorner.Parent = invFrame
 
-	local invTitle = makeLabel(invFrame, "Inventario", UDim2.new(1, 0, 0, 24), UDim2.new(0, 0, 0, 0), 13, true)
-	invTitle.TextColor3 = Color3.fromRGB(200, 200, 255)
+	local invTitle = makeLabel(invFrame, "🎒 Inventario", UDim2.new(1, 0, 0, 22), UDim2.new(0, 0, 0, 2), 13, true)
+	invTitle.TextColor3 = Color3.fromRGB(200, 210, 255)
 
 	local invLayout = Instance.new("UIListLayout")
 	invLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -166,88 +221,70 @@ function HUD.create(player: Player)
 	invLayout.Parent = invFrame
 
 	local invPadding = Instance.new("UIPadding")
-	invPadding.PaddingTop = UDim.new(0, 28)
+	invPadding.PaddingTop = UDim.new(0, 26)
 	invPadding.PaddingLeft = UDim.new(0, 6)
 	invPadding.PaddingRight = UDim.new(0, 6)
+	invPadding.PaddingBottom = UDim.new(0, 6)
 	invPadding.Parent = invFrame
 
 	local inventoryButtons: { TextButton } = {}
+	local cachedPlotState: { Plant | boolean } = {}
+	local lastInventoryCount = -1
 
-	-- ── Popup text (lucky hit notifications) ─────────────────────────────────
+	-- Helper to update coins label and egg button
+	local function updateCoinDisplay(coins: number, income: number)
+		currentCoins = coins
+		coinsLabel.Text = NumberFormat.formatMoney(coins)
+		incomeLabel.Text = NumberFormat.formatIncome(income)
 
-	local function showPopup(text: string, color: Color3)
-		local popup = Instance.new("TextLabel")
-		popup.Size = UDim2.new(0, 200, 0, 40)
-		popup.Position = UDim2.new(0.5, -100, 0.4, 0)
-		popup.BackgroundTransparency = 1
-		popup.Text = text
-		popup.TextColor3 = color
-		popup.Font = Enum.Font.GothamBold
-		popup.TextSize = 24
-		popup.TextStrokeTransparency = 0.5
-		popup.Parent = screen
-
-		local tween = TweenService:Create(popup, TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			Position = UDim2.new(0.5, -100, 0.25, 0),
-			TextTransparency = 1,
-			TextStrokeTransparency = 1,
-		})
-		tween:Play()
-		tween.Completed:Connect(function() popup:Destroy() end)
+		eggBtn.BackgroundColor3 = coins >= GameConfig.EGG_COST
+			and Color3.fromRGB(50, 110, 200)
+			or Color3.fromRGB(75, 75, 85)
 	end
 
-	-- ── Update function called from init.client ───────────────────────────────
+	self.updateCoins = function(coins: number, income: number)
+		updateCoinDisplay(coins, income)
+	end
 
-	local lastCoins = 0
-
-	function self.update(data)
-		-- Animate coins label
-		local target = data.coins
-		if target ~= lastCoins then
-			local tween = TweenService:Create(
-				coinsLabel,
-				TweenInfo.new(0.4, Enum.EasingStyle.Quad),
-				{}
-			)
-			tween:Play()
-			coinsLabel.Text = NumberFormat.formatMoney(target)
-			lastCoins = target
-		end
-
-		incomeLabel.Text = NumberFormat.formatIncome(data.incomePerSecond or 0)
+	self.updateFull = function(data: PlayerData & { incomePerSecond: number? })
+		updateCoinDisplay(data.coins, data.incomePerSecond or 0)
+		cachedPlotState = data.plot
 
 		-- Update plot slots
 		for i = 1, GameConfig.PLOT_SIZE do
 			local slot = data.plot[i]
 			local btn = slotButtons[i]
-			if slot and slot ~= false then
-				local species = GameConfig.getSpecies(slot.speciesName)
+			if slot and type(slot) == "table" then
 				local rarity = GameConfig.getRarity(slot.rarityId)
+				local incomeVal = GameConfig.getIncome(slot.speciesName, slot.rarityId)
 				btn.BackgroundColor3 = rarityColor(slot.rarityId)
-				btn.Text = (slot.speciesName or "?") .. "\n" .. (rarity and rarity.name or "?")
-				btn.TextSize = 9
+				btn.Text = string.format("%s\n%s\n+$%d/s", slot.speciesName or "?", rarity and rarity.name or "?", incomeVal)
+				btn.TextSize = 8
 			else
-				btn.BackgroundColor3 = Color3.fromRGB(50, 90, 50)
-				btn.Text = tostring(i)
-				btn.TextSize = 11
+				btn.BackgroundColor3 = Color3.fromRGB(40, 75, 40)
+				btn.Text = "Vacío\n(" .. i .. ")"
+				btn.TextSize = 10
 			end
 		end
 
-		-- Rebuild inventory list
-		for _, b in inventoryButtons do b:Destroy() end
+		-- Rebuild inventory only when inventory changes (avoids constant GC churn)
+		for _, b in inventoryButtons do
+			b:Destroy()
+		end
 		table.clear(inventoryButtons)
+		lastInventoryCount = #data.plants
 
 		for idx, plant in data.plants do
 			local rarity = GameConfig.getRarity(plant.rarityId)
 			local income = GameConfig.getIncome(plant.speciesName, plant.rarityId)
 
 			local invBtn = Instance.new("TextButton")
-			invBtn.Size = UDim2.new(1, 0, 0, 48)
+			invBtn.Size = UDim2.new(1, 0, 0, 44)
 			invBtn.BackgroundColor3 = rarityColor(plant.rarityId)
-			invBtn.BackgroundTransparency = 0.3
-			invBtn.Text = plant.speciesName .. "\n" .. (rarity and rarity.name or "?") .. " · +" .. NumberFormat.formatMoney(income) .. "/s"
-			invBtn.TextColor3 = Color3.new(1, 1, 1)
-			invBtn.Font = Enum.Font.Gotham
+			invBtn.BackgroundTransparency = 0.25
+			invBtn.Text = string.format("%s (%s)\n+$%s/s", plant.speciesName, rarity and rarity.name or "?", NumberFormat.formatMoney(income):gsub("%$", ""))
+			invBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			invBtn.Font = Enum.Font.GothamBold
 			invBtn.TextSize = 11
 			invBtn.AutoButtonColor = true
 			invBtn.LayoutOrder = idx
@@ -261,7 +298,7 @@ function HUD.create(player: Player)
 			invBtn.MouseButton1Click:Connect(function()
 				-- Find first empty slot and place there
 				for s = 1, GameConfig.PLOT_SIZE do
-					local slot = data.plot[s]
+					local slot = cachedPlotState[s]
 					if not slot or slot == false then
 						if self.onPlacePlant then
 							self.onPlacePlant(inventoryIndex, s)
@@ -269,16 +306,11 @@ function HUD.create(player: Player)
 						return
 					end
 				end
-				showPopup("Plot lleno!", Color3.fromRGB(255, 100, 100))
+				showPopup("¡Plot lleno!", Color3.fromRGB(255, 100, 100))
 			end)
 
 			table.insert(inventoryButtons, invBtn)
 		end
-
-		-- Update egg button color based on affordability
-		eggBtn.BackgroundColor3 = data.coins >= GameConfig.EGG_COST
-			and Color3.fromRGB(60, 120, 200)
-			or Color3.fromRGB(80, 80, 80)
 	end
 
 	return self
