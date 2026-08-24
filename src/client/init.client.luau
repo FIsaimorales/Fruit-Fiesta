@@ -11,34 +11,18 @@ end
 
 local HUD = require(script.HUD)
 
--- ── Remote references ─────────────────────────────────────────────────────────
+-- ── Remote references ──────────────────────────────────────────────────────────
 
 local updatePlayerData = remotes:WaitForChild("UpdatePlayerData") :: RemoteEvent
-local updateCoins = remotes:WaitForChild("UpdateCoins") :: RemoteEvent
-local openEgg = remotes:WaitForChild("OpenEgg") :: RemoteEvent
-local placePlant = remotes:WaitForChild("PlacePlant") :: RemoteEvent
-local removePlant = remotes:WaitForChild("RemovePlant") :: RemoteEvent
+local updateCoins      = remotes:WaitForChild("UpdateCoins")      :: RemoteEvent
 
 -- ── Init HUD ──────────────────────────────────────────────────────────────────
 
 local hud = HUD.create(player)
 
--- Callbacks HUD fires when player takes actions
-hud.onOpenEgg = function()
-	openEgg:FireServer()
-end
+-- ── Receive server state ───────────────────────────────────────────────────────
 
-hud.onPlacePlant = function(inventoryIndex: number, slotIndex: number)
-	placePlant:FireServer(inventoryIndex, slotIndex)
-end
-
-hud.onRemovePlant = function(slotIndex: number)
-	removePlant:FireServer(slotIndex)
-end
-
--- ── Receive server state ──────────────────────────────────────────────────────
-
--- Full player state update (on join, inventory changes, egg open, plot change)
+-- Full player state update (on join or data changes)
 updatePlayerData.OnClientEvent:Connect(function(data)
 	hud.updateFull(data)
 end)
@@ -48,4 +32,4 @@ updateCoins.OnClientEvent:Connect(function(coins: number, income: number)
 	hud.updateCoins(coins, income)
 end)
 
-print("[Client] FruitGarden initialized with network optimizations.")
+print("[Client] FruitGarden HUD initialized.")
