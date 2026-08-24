@@ -6,12 +6,11 @@ local DataManager = require(script.DataManager)
 local IncomeService = require(script.IncomeService)
 local GameConfig = require(ReplicatedStorage.Shared.GameConfig)
 
+export type Plant = GameConfig.Plant
+
 -- Create or retrieve RemoteEvents folder in ReplicatedStorage
-local remotes: Folder
-local existingRemotes = ReplicatedStorage:FindFirstChild("Remotes")
-if existingRemotes and existingRemotes:IsA("Folder") then
-	remotes = existingRemotes
-else
+local remotes = ReplicatedStorage:FindFirstChild("Remotes") :: Folder
+if not remotes then
 	remotes = Instance.new("Folder")
 	remotes.Name = "Remotes"
 	remotes.Parent = ReplicatedStorage
@@ -28,11 +27,14 @@ local function getOrCreateRemote(name: string): RemoteEvent
 	return r
 end
 
--- Server → Client: push full player state (inventory changes, initial load)
-getOrCreateRemote("UpdatePlayerData")
+-- Server → Client: push full player state
+local _updatePlayerData = getOrCreateRemote("UpdatePlayerData")
 
 -- Server → Client: lightweight tick update for coins & income/s
-getOrCreateRemote("UpdateCoins")
+local _updateCoins = getOrCreateRemote("UpdateCoins")
+
+-- Server → Client: notify egg gacha reveal result
+local eggOpened = getOrCreateRemote("EggOpened")
 
 -- Client → Server: open an egg
 local openEgg = getOrCreateRemote("OpenEgg")
@@ -42,6 +44,9 @@ local placePlant = getOrCreateRemote("PlacePlant")
 
 -- Client → Server: remove plant from plot slot back to inventory
 local removePlant = getOrCreateRemote("RemovePlant")
+
+-- Client → Server: auto equip best plants
+local autoEquipBest = getOrCreateRemote("AutoEquipBest")
 
 -- ── Debounce anti-spam helper ────────────────────────────────────────────────
 local lastAction: { [number]: number } = {}
@@ -66,7 +71,7 @@ local function rollRarity(): number
 
 	local roll = math.random() * totalWeight
 	local cumulative = 0
-	for id, w in ipairs(GameConfig.EGG_WEIGHTS) do
+	for id, w in GameConfig.EGG_WEIGHTS do
 		cumulative += w
 		if roll <= cumulative then
 			return id
@@ -79,16 +84,12 @@ local function rollEgg(): (string, number)
 	local rarityId = rollRarity()
 	local eligibleSpecies = GameConfig.getSpeciesForRarity(rarityId)
 
-	if #eligibleSpecies == 0 then
-		warn("[Server] No hay especies para rarityId=" .. rarityId .. ". Usando fallback Manzana.")
-		return "Manzana", 1
-	end
 	local selectedSpecies = eligibleSpecies[math.random(1, #eligibleSpecies)]
 	return selectedSpecies.name, rarityId
 end
 
 openEgg.OnServerEvent:Connect(function(player: Player)
-	if not checkRateLimit(player, 0.15) then
+	if not checkRateLimit(player, 0.2) then
 		return
 	end
 
@@ -103,7 +104,11 @@ openEgg.OnServerEvent:Connect(function(player: Player)
 	data.coins -= GameConfig.EGG_COST
 
 	local speciesName, rarityId = rollEgg()
-	table.insert(data.plants, { speciesName = speciesName, rarityId = rarityId })
+	local newPlant: Plant = { speciesName = speciesName, rarityId = rarityId }
+	table.insert(data.plants, newPlant)
+
+	-- Notify client to play the gacha reveal cinematic
+	eggOpened:FireClient(player, newPlant)
 
 	IncomeService.pushUpdate(player)
 end)
@@ -137,7 +142,7 @@ placePlant.OnServerEvent:Connect(function(player: Player, inventoryIndex: any, s
 
 	-- Ensure target slot is empty
 	local currentSlot = data.plot[slotIndex]
-	if currentSlot and (currentSlot :: any) ~= false then
+	if currentSlot and currentSlot ~= false then
 		return
 	end
 
@@ -170,12 +175,66 @@ removePlant.OnServerEvent:Connect(function(player: Player, slotIndex: any)
 	end
 
 	local slot = data.plot[slotIndex]
-	if not slot or (slot :: any) == false or type(slot) ~= "table" then
+	if not slot or slot == false or type(slot) ~= "table" then
 		return
 	end
 
 	data.plot[slotIndex] = false
 	table.insert(data.plants, slot)
+
+	IncomeService.pushUpdate(player)
+end)
+
+-- Auto equip best plants into the plot
+autoEquipBest.OnServerEvent:Connect(function(player: Player)
+	if not checkRateLimit(player, 0.2) then
+		return
+	end
+
+	local data = DataManager.get(player)
+	if not data then
+		return
+	end
+
+	-- Collect all plants
+	local allPlants: { Plant } = {}
+	for _, slot in data.plot do
+		if slot and type(slot) == "table" then
+			table.insert(allPlants, slot)
+		end
+	end
+	for _, plant in data.plants do
+		table.insert(allPlants, plant)
+	end
+
+	-- Sort by income descending
+	table.sort(allPlants, function(a, b)
+		local incomeA = GameConfig.getIncome(a.speciesName, a.rarityId)
+		local incomeB = GameConfig.getIncome(b.speciesName, b.rarityId)
+		if incomeA == incomeB then
+			return a.rarityId > b.rarityId
+		end
+		return incomeA > incomeB
+	end)
+
+	-- Fill plot with best
+	local newPlot: { Plant | boolean } = {}
+	local newPlants: { Plant } = {}
+
+	for i = 1, GameConfig.PLOT_SIZE do
+		if allPlants[i] then
+			newPlot[i] = allPlants[i]
+		else
+			newPlot[i] = false
+		end
+	end
+
+	for i = GameConfig.PLOT_SIZE + 1, #allPlants do
+		table.insert(newPlants, allPlants[i])
+	end
+
+	data.plot = newPlot
+	data.plants = newPlants
 
 	IncomeService.pushUpdate(player)
 end)
@@ -189,9 +248,6 @@ local function setupPlayer(player: Player)
 	end
 end
 
--- Inicializar IncomeService ANTES de conectar PlayerAdded para evitar nil-access en pushUpdate
-IncomeService.init(remotes)
-
 Players.PlayerAdded:Connect(setupPlayer)
 
 Players.PlayerRemoving:Connect(function(player: Player)
@@ -202,4 +258,6 @@ for _, player in Players:GetPlayers() do
 	task.spawn(setupPlayer, player)
 end
 
-print("[Server] FruitGarden initialized with security and gacha fixes.")
+IncomeService.init(remotes)
+
+print("[Server] FruitGarden initialized with modern UI remotes & AutoEquip.")
