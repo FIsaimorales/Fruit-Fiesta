@@ -10,9 +10,13 @@ if not remotes then
 end
 
 local HUD = require(script.HUD)
+local SoundManager = require(script.SoundManager)
 local GameConfig = require(ReplicatedStorage.Shared.GameConfig)
 
 export type Plant = GameConfig.Plant
+
+-- Inicializar gestor de sonido global (conecta la música y efectos de Workspace/SoundService a los sliders)
+SoundManager.init()
 
 -- ── Remote references ─────────────────────────────────────────────────────────
 
@@ -62,4 +66,4 @@ eggOpened.OnClientEvent:Connect(function(plant: Plant)
 	hud.showGachaReveal(plant)
 end)
 
-print("[Client] Fruit Fiesta Modern HUD initialized successfully.")
+print("[Client] Fruit Fiesta Modern HUD & Audio Manager initialized successfully.")

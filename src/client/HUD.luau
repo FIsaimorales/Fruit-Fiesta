@@ -1,7 +1,6 @@
 --!strict
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -9,6 +8,7 @@ local GameConfig = require(ReplicatedStorage.Shared.GameConfig)
 local NumberFormat = require(ReplicatedStorage.Shared.NumberFormat)
 local UITheme = require(script.Parent.UITheme)
 local UIEffects = require(script.Parent.UIEffects)
+local SoundManager = require(script.Parent.SoundManager)
 
 export type Plant = GameConfig.Plant
 export type PlayerData = GameConfig.PlayerData
@@ -24,13 +24,6 @@ export type HUDInstance = {
 }
 
 local HUD = {}
-
-local function applyGroupVolume(groupName: string, vol: number)
-	local soundGroup = SoundService:FindFirstChild(groupName)
-	if soundGroup and soundGroup:IsA("SoundGroup") then
-		soundGroup.Volume = vol
-	end
-end
 
 function HUD.create(player: Player): HUDInstance
 	local self: HUDInstance = {
@@ -55,7 +48,7 @@ function HUD.create(player: Player): HUDInstance
 	screen.Name = "FruitGardenHUD"
 	screen.ResetOnSpawn = false
 	screen.IgnoreGuiInset = true
-	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling -- CRÍTICO: Garantiza que todos los hijos se rendericen sobre sus padres
+	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling -- Garantiza renderizado jerárquico limpio
 	screen.DisplayOrder = 10
 	screen.Parent = playerGui
 
@@ -86,7 +79,7 @@ function HUD.create(player: Player): HUDInstance
 	UITheme.addStroke(coinPill, UITheme.Colors.GoldAccent, 3)
 	UITheme.addGradient(coinPill, Color3.fromRGB(42, 50, 76), Color3.fromRGB(24, 28, 44))
 
-	-- Icono de moneda (ImageLabel verificado)
+	-- Icono de moneda
 	local coinIcon = Instance.new("ImageLabel")
 	coinIcon.Size = UDim2.new(0, 36, 0, 36)
 	coinIcon.Position = UDim2.new(0, 12, 0.5, 0)
@@ -293,7 +286,7 @@ function HUD.create(player: Player): HUDInstance
 		return modal, closeBtn
 	end
 
-	-- ── 6. MODAL: CONFIGURACIÓN ────────────────────────────────────────────────
+	-- ── 6. MODAL: CONFIGURACIÓN (SLIDERS REALES Y FUNCIONALES) ─────────────────
 
 	local settingsModal = createModalFrame("⚙️ CONFIGURACIÓN", 380, 350)
 
@@ -405,20 +398,17 @@ function HUD.create(player: Player): HUDInstance
 		end)
 	end
 
-	createSlider(settingsContainer, "🔊", "Volumen General", 1.0, function(v)
-		for _, child in SoundService:GetChildren() do
-			if child:IsA("SoundGroup") then
-				child.Volume = v
-			end
-		end
+	-- Control real de volumen a través de SoundManager
+	createSlider(settingsContainer, "🔊", "Volumen General", SoundManager.getMasterVolume(), function(v)
+		SoundManager.setMasterVolume(v)
 	end)
 
-	createSlider(settingsContainer, "🎵", "Música de Fondo", 1.0, function(v)
-		applyGroupVolume("Music", v)
+	createSlider(settingsContainer, "🎵", "Música de Fondo", SoundManager.getMusicVolume(), function(v)
+		SoundManager.setMusicVolume(v)
 	end)
 
-	createSlider(settingsContainer, "✨", "Efectos de Sonido", 1.0, function(v)
-		applyGroupVolume("Effects", v)
+	createSlider(settingsContainer, "✨", "Efectos de Sonido", SoundManager.getEffectsVolume(), function(v)
+		SoundManager.setEffectsVolume(v)
 	end)
 
 	gearBtn.MouseButton1Click:Connect(function()
@@ -456,7 +446,7 @@ function HUD.create(player: Player): HUDInstance
 	eggTitle.TextSize = 17
 	eggTitle.Parent = eggCard
 
-	-- Vista previa de probabilidades
+	-- Probabilidades
 	local oddsContainer = Instance.new("Frame")
 	oddsContainer.Size = UDim2.new(1, -30, 0, 115)
 	oddsContainer.Position = UDim2.new(0, 15, 0, 240)
@@ -599,7 +589,7 @@ function HUD.create(player: Player): HUDInstance
 			if slot and type(slot) == "table" then
 				if self.onRemovePlant then
 					self.onRemovePlant(currentIdx)
-					UIEffects.playSound("Pop")
+					SoundManager.playSound("Pop", 1.0, 0.5)
 				end
 			else
 				switchModal(invModal)
@@ -654,7 +644,7 @@ function HUD.create(player: Player): HUDInstance
 	autoEquipBtn.MouseButton1Click:Connect(function()
 		if self.onAutoEquip then
 			self.onAutoEquip()
-			UIEffects.playSound("Fanfare")
+			SoundManager.playSound("Fanfare", 1.2, 0.6)
 			UIEffects.spawnFloatingText(screen, "¡Mejores Frutas Plantadas!", UDim2.new(0.5, 0, 0.5, 0), UITheme.Colors.GoldAccent, 22)
 		end
 	end)
@@ -879,9 +869,9 @@ function HUD.create(player: Player): HUDInstance
 		UIEffects.shakeObject(gachaCard, 0.25, 6)
 
 		if plant.rarityId >= 4 then
-			UIEffects.playSound("Fanfare")
+			SoundManager.playSound("Fanfare", 1.0, 0.8)
 		else
-			UIEffects.playSound("EggCrack")
+			SoundManager.playSound("EggCrack", 1.0, 0.7)
 		end
 	end
 
@@ -1004,12 +994,12 @@ function HUD.create(player: Player): HUDInstance
 					if not slot or slot == false then
 						if self.onPlacePlant then
 							self.onPlacePlant(currentInventoryIdx, s)
-							UIEffects.playSound("Pop")
+							SoundManager.playSound("Pop", 1.1, 0.5)
 						end
 						return
 					end
 				end
-				UIEffects.playSound("Error")
+				SoundManager.playSound("Error", 1.0, 0.6)
 				UIEffects.spawnFloatingText(screen, "¡El jardín está lleno!", UDim2.new(0.5, 0, 0.5, 0), UITheme.Colors.RedDanger, 22)
 			end)
 

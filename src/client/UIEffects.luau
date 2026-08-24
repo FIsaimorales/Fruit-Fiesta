@@ -1,51 +1,11 @@
 --!strict
 local TweenService = game:GetService("TweenService")
-local SoundService = game:GetService("SoundService")
+local SoundManager = require(script.Parent.SoundManager)
 
 local UIEffects = {}
 
--- Audio asset IDs for satisfying feedback
-local SOUND_IDS: { [string]: string } = {
-	Click = "rbxassetid://6895079853",
-	Pop = "rbxassetid://9069609200",
-	CoinCollect = "rbxassetid://5153734608",
-	EggCrack = "rbxassetid://9069608998",
-	Fanfare = "rbxassetid://9069608552",
-	Error = "rbxassetid://9069608823",
-	Equip = "rbxassetid://6034287525",
-}
-
-local soundsFolder: Folder? = nil
-local function getSound(name: string): Sound?
-	if not soundsFolder then
-		local found = SoundService:FindFirstChild("FruitUISounds")
-		if found and found:IsA("Folder") then
-			soundsFolder = found
-		else
-			soundsFolder = Instance.new("Folder")
-			soundsFolder.Name = "FruitUISounds"
-			soundsFolder.Parent = SoundService
-		end
-	end
-
-	local s = soundsFolder:FindFirstChild(name) :: Sound?
-	if not s and SOUND_IDS[name] then
-		s = Instance.new("Sound")
-		s.Name = name
-		s.SoundId = SOUND_IDS[name]
-		s.Volume = 0.6
-		s.Parent = soundsFolder
-	end
-	return s
-end
-
-function UIEffects.playSound(name: string)
-	task.spawn(function()
-		local snd = getSound(name)
-		if snd then
-			snd:Play()
-		end
-	end)
+function UIEffects.playSound(name: string, pitch: number?, volumeScale: number?)
+	SoundManager.playSound(name, pitch, volumeScale)
 end
 
 -- Adds elastic squash & stretch animations to any GuiButton
@@ -68,10 +28,10 @@ function UIEffects.applyButtonBounce(button: GuiButton, baseScale: number?)
 		hoverTween = TweenService:Create(
 			uiScale,
 			TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-			{ Scale = scale * 1.07 }
+			{ Scale = scale * 1.06 }
 		)
 		hoverTween:Play()
-		UIEffects.playSound("Pop")
+		SoundManager.playSound("Pop", 1.2, 0.4)
 	end)
 
 	button.MouseLeave:Connect(function()
@@ -93,10 +53,10 @@ function UIEffects.applyButtonBounce(button: GuiButton, baseScale: number?)
 		pressTween = TweenService:Create(
 			uiScale,
 			TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-			{ Scale = scale * 0.92 }
+			{ Scale = scale * 0.93 }
 		)
 		pressTween:Play()
-		UIEffects.playSound("Click")
+		SoundManager.playSound("Click", 1.0, 0.6)
 	end)
 
 	button.MouseButton1Up:Connect(function()
@@ -133,7 +93,7 @@ function UIEffects.openModal(modalFrame: GuiObject, backdrop: GuiObject?)
 		):Play()
 	end
 
-	UIEffects.playSound("Pop")
+	SoundManager.playSound("Pop", 1.0, 0.6)
 
 	local tween = TweenService:Create(
 		uiScale,
@@ -195,7 +155,7 @@ end
 -- Spawns floating animated +$ text popping upward
 function UIEffects.spawnFloatingText(parent: Instance, text: string, startPos: UDim2, color: Color3, fontSize: number?)
 	local label = Instance.new("TextLabel")
-	label.Size = UDim2.new(0, 200, 0, 36)
+	label.Size = UDim2.new(0, 220, 0, 36)
 	label.Position = startPos
 	label.AnchorPoint = Vector2.new(0.5, 0.5)
 	label.BackgroundTransparency = 1
