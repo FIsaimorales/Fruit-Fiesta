@@ -57,7 +57,7 @@ end
 
 function HUD.create(player: Player)
 	local self = {}
-	self.onOpenEgg = nil :: ((()-> ())?
+	self.onOpenEgg = nil :: (() -> ())?
 	self.onPlacePlant = nil :: ((number, number) -> ())?
 	self.onRemovePlant = nil :: ((number) -> ())?
 
