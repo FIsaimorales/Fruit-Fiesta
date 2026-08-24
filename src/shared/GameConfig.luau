@@ -28,18 +28,18 @@ export type PlayerData = {
 
 -- Rarities ordered from lowest to highest
 -- income/s per plant = baseValue * species.multiplier
-GameConfig.RARITIES: { Rarity } = {
+GameConfig.RARITIES = {
 	{ name = "Común",        id = 1, baseValue = 10 },
 	{ name = "Poco común",   id = 2, baseValue = 18 },
 	{ name = "Raro",         id = 3, baseValue = 26 },
 	{ name = "Épico",        id = 4, baseValue = 34 },
 	{ name = "Legendario",   id = 5, baseValue = 42 },
 	{ name = "Mítico",       id = 6, baseValue = 50 },
-}
+} :: { Rarity }
 
 -- minRarity: lowest rarity this species can roll
 -- fixedRarity: if set, species is always this rarity (ignores egg roll)
-GameConfig.SPECIES: { Species } = {
+GameConfig.SPECIES = {
 	{ name = "Manzana",          minRarity = 1, multiplier = 1.0 },
 	{ name = "Banana",           minRarity = 1, multiplier = 1.0 },
 	{ name = "Naranja",          minRarity = 1, multiplier = 1.0 },
@@ -52,7 +52,7 @@ GameConfig.SPECIES: { Species } = {
 	{ name = "Fruta Dorada",     minRarity = 5, multiplier = 3.0 },
 	{ name = "Fruta de Cristal", minRarity = 5, multiplier = 3.0 },
 	{ name = "Fruta Cósmica",    minRarity = 6, multiplier = 4.0, fixedRarity = 6 },
-}
+} :: { Species }
 
 -- Number of pot slots per player plot
 GameConfig.PLOT_SIZE = 10
