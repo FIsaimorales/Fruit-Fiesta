@@ -254,10 +254,11 @@ Players.PlayerRemoving:Connect(function(player: Player)
 	lastAction[player.UserId] = nil
 end)
 
+-- Must run before any setupPlayer call: pushUpdate fires the remotes this sets up.
+IncomeService.init(remotes)
+
 for _, player in Players:GetPlayers() do
 	task.spawn(setupPlayer, player)
 end
-
-IncomeService.init(remotes)
 
 print("[Server] FruitGarden initialized with modern UI remotes & AutoEquip.")

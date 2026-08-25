@@ -523,6 +523,10 @@ function HUD.create(player: Player): HUDInstance
 		switchModal(eggModal)
 	end)
 
+	-- Forward declaration: referenced by the empty-slot click handler below,
+	-- assigned once section 9 builds the inventory modal.
+	local invModal: Frame
+
 	-- ── 8. MODAL: JARDÍN (PLOT MACETAS) ────────────────────────────────────────
 
 	local plotModal = createModalFrame("🌱 MI JARDÍN (MACETAS)", 460, 440)
@@ -605,7 +609,7 @@ function HUD.create(player: Player): HUDInstance
 
 	-- ── 9. MODAL: MOCHILA / INVENTARIO ─────────────────────────────────────────
 
-	local invModal = createModalFrame("🎒 MOCHILA DE FRUTAS", 460, 460)
+	invModal = createModalFrame("🎒 MOCHILA DE FRUTAS", 460, 460)
 
 	local invTopBar = Instance.new("Frame")
 	invTopBar.Size = UDim2.new(1, -24, 0, 44)
