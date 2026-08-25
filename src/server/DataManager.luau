@@ -34,7 +34,40 @@ local function createDefaultData(): PlayerData
 		plants = {},
 		plot = initialPlot,
 		rebirths = 0,
+		oreLuck = GameConfig.LUCK_START,
+		pedestals = GameConfig.PEDESTAL_START,
 	}
+end
+
+-- Clamps stored values back into legal ranges. Protects against fields that
+-- predate an upgrade being added, and against corrupt/tampered saves.
+local function normalize(data: PlayerData)
+	if type(data.coins) ~= "number" or data.coins ~= data.coins then
+		data.coins = GameConfig.STARTING_COINS
+	end
+	data.coins = math.max(math.floor(data.coins), 0)
+
+	if type(data.rebirths) ~= "number" then
+		data.rebirths = 0
+	end
+	data.rebirths = math.max(math.floor(data.rebirths), 0)
+
+	if type(data.oreLuck) ~= "number" then
+		data.oreLuck = GameConfig.LUCK_START
+	end
+	data.oreLuck = math.clamp(math.floor(data.oreLuck), GameConfig.LUCK_START, GameConfig.LUCK_MAX)
+
+	if type(data.pedestals) ~= "number" then
+		data.pedestals = GameConfig.PEDESTAL_START
+	end
+	data.pedestals = math.clamp(math.floor(data.pedestals), GameConfig.PEDESTAL_START, GameConfig.PEDESTAL_MAX)
+
+	if type(data.plants) ~= "table" then
+		data.plants = {}
+	end
+	if type(data.plot) ~= "table" then
+		data.plot = {}
+	end
 end
 
 local function deepCopy(t: any): any
@@ -89,6 +122,8 @@ function DataManager.load(player: Player): PlayerData?
 		-- Nuevo jugador: asignar datos iniciales
 		data = createDefaultData()
 	end
+
+	normalize(data)
 
 	-- Asegurar que el array del plot tenga la longitud correcta
 	for i = 1, GameConfig.PLOT_SIZE do

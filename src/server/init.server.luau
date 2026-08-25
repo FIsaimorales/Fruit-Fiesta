@@ -4,6 +4,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local DataManager = require(script.DataManager)
 local IncomeService = require(script.IncomeService)
+local RollService = require(script.RollService)
+local UpgradeService = require(script.UpgradeService)
+local PlotService = require(script.PlotService)
 local GameConfig = require(ReplicatedStorage.Shared.GameConfig)
 
 export type Plant = GameConfig.Plant
@@ -48,6 +51,15 @@ local removePlant = getOrCreateRemote("RemovePlant")
 -- Client → Server: auto equip best plants
 local autoEquipBest = getOrCreateRemote("AutoEquipBest")
 
+-- Server → Client: roll outcome (already decided) + how long to spin for
+local _rollResult = getOrCreateRemote("RollResult")
+
+-- Client → Server: pull a roll pedestal
+local requestRoll = getOrCreateRemote("RequestRoll")
+
+-- Client → Server: purchase an upgrade (oreLuck / pedestals)
+local buyUpgrade = getOrCreateRemote("BuyUpgrade")
+
 -- ── Debounce anti-spam helper ────────────────────────────────────────────────
 local lastAction: { [number]: number } = {}
 
@@ -59,6 +71,13 @@ local function checkRateLimit(player: Player, minDelay: number): boolean
 	end
 	lastAction[player.UserId] = now
 	return true
+end
+
+-- Pushes state to the owning client and repaints their physical plot. Every
+-- mutation below funnels through this so HUD and world never disagree.
+local function syncPlayer(player: Player)
+	IncomeService.pushUpdate(player)
+	PlotService.refresh(player)
 end
 
 -- ── Egg gacha logic (rarity rolled first according to EGG_WEIGHTS) ─────────────
@@ -110,7 +129,7 @@ openEgg.OnServerEvent:Connect(function(player: Player)
 	-- Notify client to play the gacha reveal cinematic
 	eggOpened:FireClient(player, newPlant)
 
-	IncomeService.pushUpdate(player)
+	syncPlayer(player)
 end)
 
 -- ── Plot management ───────────────────────────────────────────────────────────
@@ -133,7 +152,8 @@ placePlant.OnServerEvent:Connect(function(player: Player, inventoryIndex: any, s
 		return
 	end
 
-	if slotIndex < 1 or slotIndex > GameConfig.PLOT_SIZE then
+	-- Only pots unlocked at this rebirth count are plantable.
+	if slotIndex < 1 or slotIndex > GameConfig.getMaxPots(data.rebirths or 0) then
 		return
 	end
 	if inventoryIndex < 1 or inventoryIndex > #data.plants then
@@ -152,7 +172,7 @@ placePlant.OnServerEvent:Connect(function(player: Player, inventoryIndex: any, s
 	end
 
 	data.plot[slotIndex] = plant
-	IncomeService.pushUpdate(player)
+	syncPlayer(player)
 end)
 
 removePlant.OnServerEvent:Connect(function(player: Player, slotIndex: any)
@@ -182,7 +202,7 @@ removePlant.OnServerEvent:Connect(function(player: Player, slotIndex: any)
 	data.plot[slotIndex] = false
 	table.insert(data.plants, slot)
 
-	IncomeService.pushUpdate(player)
+	syncPlayer(player)
 end)
 
 -- Auto equip best plants into the plot
@@ -217,25 +237,58 @@ autoEquipBest.OnServerEvent:Connect(function(player: Player)
 		return incomeA > incomeB
 	end)
 
-	-- Fill plot with best
+	-- Fill unlocked pots with the best plants; the rest go back to the backpack
+	local capacity = GameConfig.getMaxPots(data.rebirths or 0)
 	local newPlot: { Plant | boolean } = {}
 	local newPlants: { Plant } = {}
 
 	for i = 1, GameConfig.PLOT_SIZE do
-		if allPlants[i] then
+		if i <= capacity and allPlants[i] then
 			newPlot[i] = allPlants[i]
 		else
 			newPlot[i] = false
 		end
 	end
 
-	for i = GameConfig.PLOT_SIZE + 1, #allPlants do
+	for i = capacity + 1, #allPlants do
 		table.insert(newPlants, allPlants[i])
 	end
 
 	data.plot = newPlot
 	data.plants = newPlants
 
+	syncPlayer(player)
+end)
+
+-- ── Roll pedestals ────────────────────────────────────────────────────────────
+
+-- The pedestal itself is a ProximityPrompt handled by PlotService; this remote
+-- is the HUD's equivalent button. Both funnel into the same validated path.
+requestRoll.OnServerEvent:Connect(function(player: Player, pedestalIndex: any)
+	if not checkRateLimit(player, 0.1) then
+		return
+	end
+	RollService.requestRoll(player, pedestalIndex)
+end)
+
+-- ── Upgrades ──────────────────────────────────────────────────────────────────
+
+buyUpgrade.OnServerEvent:Connect(function(player: Player, upgradeId: any)
+	if not checkRateLimit(player, 0.2) then
+		return
+	end
+	if typeof(upgradeId) ~= "string" then
+		return
+	end
+	UpgradeService.buy(player, upgradeId)
+end)
+
+-- Roll and upgrade both mutate coins/inventory, so refresh the client after.
+RollService.Rolled.Event:Connect(function(player: Player)
+	IncomeService.pushUpdate(player)
+end)
+
+UpgradeService.Purchased.Event:Connect(function(player: Player)
 	IncomeService.pushUpdate(player)
 end)
 
@@ -243,9 +296,12 @@ end)
 
 local function setupPlayer(player: Player)
 	local data = DataManager.load(player)
-	if data then
-		IncomeService.pushUpdate(player)
+	if not data then
+		return
 	end
+
+	PlotService.assign(player)
+	IncomeService.pushUpdate(player)
 end
 
 Players.PlayerAdded:Connect(setupPlayer)
@@ -254,11 +310,13 @@ Players.PlayerRemoving:Connect(function(player: Player)
 	lastAction[player.UserId] = nil
 end)
 
--- Must run before any setupPlayer call: pushUpdate fires the remotes this sets up.
+-- Must run before any setupPlayer call: pushUpdate fires the remotes these set up.
 IncomeService.init(remotes)
+RollService.init(remotes)
+PlotService.init()
 
 for _, player in Players:GetPlayers() do
 	task.spawn(setupPlayer, player)
 end
 
-print("[Server] FruitGarden initialized with modern UI remotes & AutoEquip.")
+print("[Server] FruitGarden initialized: roll pedestals, upgrades & 2x3 plot grid.")

@@ -24,6 +24,8 @@ export type PlayerData = {
 	plants: { Plant },
 	plot: { Plant | boolean },
 	rebirths: number,
+	oreLuck: number,
+	pedestals: number,
 }
 
 -- Rarities ordered from lowest to highest
@@ -54,8 +56,16 @@ GameConfig.SPECIES = {
 	{ name = "Fruta Cósmica",    minRarity = 6, multiplier = 4.0, fixedRarity = 6 },
 } :: { Species }
 
--- Number of pot slots per player plot
-GameConfig.PLOT_SIZE = 10
+-- ── Plot capacity ─────────────────────────────────────────────────────────────
+-- Pots start at PLOT_BASE_SIZE and unlock in jumps every REBIRTHS_PER_UNLOCK
+-- rebirths (rebirth 5 → 12, 10 → 14, 15 → 16, 20 → 18, 25 → 20, capped).
+GameConfig.PLOT_BASE_SIZE = 10
+GameConfig.PLOT_MAX_SIZE = 20
+GameConfig.POTS_PER_UNLOCK = 2
+GameConfig.REBIRTHS_PER_UNLOCK = 5
+
+-- Absolute slot count every plot array / UI grid is allocated for.
+GameConfig.PLOT_SIZE = GameConfig.PLOT_MAX_SIZE
 
 -- Starting economy parameters (prevents new player deadlock)
 GameConfig.STARTING_COINS = 150
@@ -63,8 +73,33 @@ GameConfig.STARTING_PLANT = { speciesName = "Manzana", rarityId = 1 }
 
 -- Egg gacha settings
 GameConfig.EGG_COST = 100
--- Weights per rarity id (1=Común → 6=Mítico). Sum = 100
+-- Weights per rarity id (1=Común → 6=Mítico). Sum = 100 at 1x luck.
 GameConfig.EGG_WEIGHTS = { 50, 25, 13, 7, 4, 1 }
+
+-- ── Roll pedestal ─────────────────────────────────────────────────────────────
+-- Rolling is free but each pedestal recharges independently, so owning more
+-- pedestals is what raises your roll throughput.
+GameConfig.ROLL_COOLDOWN = 8
+-- Seconds the client-side slot-machine animation runs before revealing.
+-- The server has already decided the result; this is presentation only.
+GameConfig.ROLL_ANIM_DURATION = 2.6
+
+-- ── Upgrades ──────────────────────────────────────────────────────────────────
+GameConfig.LUCK_START = 1
+GameConfig.LUCK_STEP = 1
+GameConfig.LUCK_MAX = 25
+GameConfig.LUCK_COST_BASE = 500
+GameConfig.LUCK_COST_GROWTH = 1.6
+
+GameConfig.PEDESTAL_START = 2
+GameConfig.PEDESTAL_MAX = 5
+GameConfig.PEDESTAL_COST_BASE = 2500
+GameConfig.PEDESTAL_COST_GROWTH = 3
+
+-- Controls how hard luck bends the rarity curve. Rarity i gets its weight
+-- multiplied by luck^((i-1) * exponent), so common is untouched and higher
+-- rarities scale progressively harder.
+GameConfig.LUCK_RARITY_EXPONENT = 0.35
 
 -- How often the server ticks passive income (seconds)
 GameConfig.INCOME_TICK_RATE = 1
@@ -119,6 +154,66 @@ function GameConfig.getSpeciesForRarity(rarityId: number): { Species }
 		end
 	end
 	return valid
+end
+
+-- ── Plot capacity ─────────────────────────────────────────────────────────────
+
+-- How many pots this player has unlocked at their current rebirth count.
+function GameConfig.getMaxPots(rebirths: number): number
+	local unlocks = math.floor(math.max(rebirths, 0) / GameConfig.REBIRTHS_PER_UNLOCK)
+	local pots = GameConfig.PLOT_BASE_SIZE + unlocks * GameConfig.POTS_PER_UNLOCK
+	return math.min(pots, GameConfig.PLOT_MAX_SIZE)
+end
+
+-- Rebirth count at which the next pot unlock lands, or nil once capped.
+function GameConfig.getNextPotUnlock(rebirths: number): number?
+	if GameConfig.getMaxPots(rebirths) >= GameConfig.PLOT_MAX_SIZE then
+		return nil
+	end
+	local unlocks = math.floor(math.max(rebirths, 0) / GameConfig.REBIRTHS_PER_UNLOCK)
+	return (unlocks + 1) * GameConfig.REBIRTHS_PER_UNLOCK
+end
+
+-- ── Luck & rarity odds ────────────────────────────────────────────────────────
+
+-- Rarity weights bent by the player's Ore Luck multiplier. At 1x luck these are
+-- exactly EGG_WEIGHTS; higher luck scales rarer entries progressively harder.
+function GameConfig.getRarityWeights(luck: number): { number }
+	local l = math.max(luck or 1, 1)
+	local weights: { number } = {}
+	for i, base in GameConfig.EGG_WEIGHTS do
+		weights[i] = base * (l ^ ((i - 1) * GameConfig.LUCK_RARITY_EXPONENT))
+	end
+	return weights
+end
+
+-- Same curve expressed as percentages (sums to 100) for display in the UI.
+function GameConfig.getRarityOdds(luck: number): { number }
+	local weights = GameConfig.getRarityWeights(luck)
+	local total = 0
+	for _, w in weights do
+		total += w
+	end
+	local odds: { number } = {}
+	for i, w in weights do
+		odds[i] = (w / total) * 100
+	end
+	return odds
+end
+
+-- ── Upgrade costs ─────────────────────────────────────────────────────────────
+
+-- Cost of the next Ore Luck level given the player's current multiplier.
+function GameConfig.getLuckCost(currentLuck: number): number
+	local purchases = math.max((currentLuck or GameConfig.LUCK_START) - GameConfig.LUCK_START, 0)
+	purchases = math.floor(purchases / GameConfig.LUCK_STEP)
+	return math.floor(GameConfig.LUCK_COST_BASE * (GameConfig.LUCK_COST_GROWTH ^ purchases))
+end
+
+-- Cost of the next Rolling Pedestal given how many the player already owns.
+function GameConfig.getPedestalCost(currentPedestals: number): number
+	local purchases = math.max((currentPedestals or GameConfig.PEDESTAL_START) - GameConfig.PEDESTAL_START, 0)
+	return math.floor(GameConfig.PEDESTAL_COST_BASE * (GameConfig.PEDESTAL_COST_GROWTH ^ purchases))
 end
 
 return GameConfig

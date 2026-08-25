@@ -3,24 +3,38 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local GameConfig = require(ReplicatedStorage.Shared.GameConfig)
 local NumberFormat = require(ReplicatedStorage.Shared.NumberFormat)
 local UITheme = require(script.Parent.UITheme)
 local UIEffects = require(script.Parent.UIEffects)
 local SoundManager = require(script.Parent.SoundManager)
+local RollAnimation = require(script.Parent.RollAnimation)
 
 export type Plant = GameConfig.Plant
 export type PlayerData = GameConfig.PlayerData
+
+-- Everything the server sends on a full state push.
+export type FullState = PlayerData & {
+	incomePerSecond: number?,
+	maxPots: number?,
+	nextPotUnlock: number?,
+	luckCost: number?,
+	pedestalCost: number?,
+}
 
 export type HUDInstance = {
 	onOpenEgg: (() -> ())?,
 	onPlacePlant: ((inventoryIndex: number, slotIndex: number) -> ())?,
 	onRemovePlant: ((slotIndex: number) -> ())?,
 	onAutoEquip: (() -> ())?,
-	updateFull: (data: PlayerData & { incomePerSecond: number? }) -> (),
+	onRoll: ((pedestalIndex: number) -> ())?,
+	onBuyUpgrade: ((upgradeId: string) -> ())?,
+	updateFull: (data: FullState) -> (),
 	updateCoins: (coins: number, income: number) -> (),
 	showGachaReveal: (plant: Plant) -> (),
+	showRollResult: (plant: Plant, duration: number) -> (),
 }
 
 local HUD = {}
@@ -31,9 +45,12 @@ function HUD.create(player: Player): HUDInstance
 		onPlacePlant = nil,
 		onRemovePlant = nil,
 		onAutoEquip = nil,
+		onRoll = nil,
+		onBuyUpgrade = nil,
 		updateFull = function() end,
 		updateCoins = function() end,
 		showGachaReveal = function() end,
+		showRollResult = function() end,
 	}
 
 	local playerGui = player:WaitForChild("PlayerGui") :: PlayerGui
@@ -55,11 +72,14 @@ function HUD.create(player: Player): HUDInstance
 	-- Variables de estado
 	local currentCoins = 0
 	local currentIncome = 0
-	local currentData: PlayerData = {
+	local currentMaxPots = GameConfig.PLOT_BASE_SIZE
+	local currentData: FullState = {
 		coins = 0,
 		plants = {},
 		plot = {},
 		rebirths = 0,
+		oreLuck = GameConfig.LUCK_START,
+		pedestals = GameConfig.PEDESTAL_START,
 	}
 
 	-- ── 1. BARRA SUPERIOR: PÍLDORA DE MONEDAS ─────────────────────────────────
@@ -175,7 +195,7 @@ function HUD.create(player: Player): HUDInstance
 	-- ── 4. BARRA DE NAVEGACIÓN DOCK INFERIOR (2026 AAA STYLE) ─────────────────
 
 	local dockFrame = Instance.new("Frame")
-	dockFrame.Size = UDim2.new(0, 420, 0, 74)
+	dockFrame.Size = UDim2.new(0, 620, 0, 74)
 	dockFrame.Position = UDim2.new(0.5, 0, 1, -16)
 	dockFrame.AnchorPoint = Vector2.new(0.5, 1)
 	dockFrame.BackgroundColor3 = Color3.fromRGB(26, 32, 48)
@@ -195,6 +215,7 @@ function HUD.create(player: Player): HUDInstance
 	local function createDockButton(iconAsset: string, label: string, topColor: Color3, bottomColor: Color3, strokeColor: Color3): TextButton
 		local btn = Instance.new("TextButton")
 		btn.Size = UDim2.new(0, 92, 0, 56)
+		btn.Name = label
 		btn.BackgroundColor3 = bottomColor
 		btn.Text = ""
 		btn.AutoButtonColor = false
@@ -226,9 +247,11 @@ function HUD.create(player: Player): HUDInstance
 		return btn
 	end
 
+	local rollDockBtn = createDockButton(UITheme.ICONS.Sparkle, "ROLL", Color3.fromRGB(255, 225, 90), Color3.fromRGB(225, 160, 20), Color3.fromRGB(170, 110, 10))
 	local eggDockBtn = createDockButton(UITheme.ICONS.Egg, "HUEVOS", Color3.fromRGB(255, 175, 45), Color3.fromRGB(205, 105, 15), Color3.fromRGB(155, 75, 10))
 	local plotDockBtn = createDockButton(UITheme.ICONS.Plant, "JARDÍN", Color3.fromRGB(75, 225, 95), Color3.fromRGB(30, 145, 50), Color3.fromRGB(18, 95, 32))
 	local invDockBtn = createDockButton(UITheme.ICONS.Backpack, "MOCHILA", Color3.fromRGB(85, 165, 255), Color3.fromRGB(35, 95, 215), Color3.fromRGB(18, 58, 145))
+	local upgradeDockBtn = createDockButton(UITheme.ICONS.Bolt, "MEJORAS", Color3.fromRGB(120, 220, 255), Color3.fromRGB(35, 140, 220), Color3.fromRGB(18, 85, 150))
 	local statsDockBtn = createDockButton(UITheme.ICONS.Trophy, "STATS", Color3.fromRGB(215, 105, 255), Color3.fromRGB(135, 45, 205), Color3.fromRGB(90, 22, 140))
 
 	-- ── 5. VENTANA MODAL BASE (HELPER) ────────────────────────────────────────
@@ -475,23 +498,44 @@ function HUD.create(player: Player): HUDInstance
 	oddsPadding.PaddingTop = UDim.new(0, 26)
 	oddsPadding.Parent = oddsContainer
 
-	local rarityBadges: { string } = { "Común 50%", "Poco C. 25%", "Raro 13%", "Épico 7%", "Legend. 4%", "Mítico 1%" }
-	for id, text in rarityBadges do
+	-- Short rarity names; the percentage next to each is recomputed from the
+	-- player's current Ore Luck every time state arrives.
+	local RARITY_SHORT_NAMES = { "Común", "Poco C.", "Raro", "Épico", "Legend.", "Mítico" }
+	local oddsLabels: { TextLabel } = {}
+
+	for id, shortName in RARITY_SHORT_NAMES do
 		local style = UITheme.getRarityStyle(id)
 		local badge = Instance.new("Frame")
 		badge.BackgroundColor3 = style.badgeColor
+		badge.LayoutOrder = id
 		badge.Parent = oddsContainer
 		UITheme.addCorner(badge, 8)
 
 		local badgeText = Instance.new("TextLabel")
 		badgeText.Size = UDim2.new(1, 0, 1, 0)
 		badgeText.BackgroundTransparency = 1
-		badgeText.Text = text
+		badgeText.Text = shortName
 		badgeText.TextColor3 = Color3.fromRGB(255, 255, 255)
 		badgeText.Font = UITheme.FontBold
 		badgeText.TextSize = 10
 		badgeText.Parent = badge
+
+		oddsLabels[id] = badgeText
 	end
+
+	-- Rewrites the odds grid for a given luck multiplier.
+	local function refreshOdds(luck: number)
+		oddsTitle.Text = string.format("PROBABILIDADES · SUERTE %dx", luck)
+
+		local odds = GameConfig.getRarityOdds(luck)
+		for id, label in oddsLabels do
+			local pct = odds[id] or 0
+			local text = pct >= 1 and string.format("%.0f%%", pct) or string.format("%.2f%%", pct)
+			label.Text = RARITY_SHORT_NAMES[id] .. "\n" .. text
+		end
+	end
+
+	refreshOdds(GameConfig.LUCK_START)
 
 	local buyEggBtn = Instance.new("TextButton")
 	buyEggBtn.Size = UDim2.new(1, -30, 0, 52)
@@ -523,6 +567,247 @@ function HUD.create(player: Player): HUDInstance
 		switchModal(eggModal)
 	end)
 
+	-- ── 7b. MODAL: PEDESTALES DE ROLL ─────────────────────────────────────────
+	-- Mirrors the physical pedestals in the plot. Each row rolls one pedestal;
+	-- cooldowns run per pedestal, so owning more means more rolls in parallel.
+
+	local rollModal = createModalFrame("🎰 PEDESTALES DE ROLL", 420, 400)
+
+	local rollHint = Instance.new("TextLabel")
+	rollHint.Size = UDim2.new(1, -30, 0, 30)
+	rollHint.Position = UDim2.new(0, 15, 0, 58)
+	rollHint.BackgroundTransparency = 1
+	rollHint.Text = "Cada pedestal recarga por separado."
+	rollHint.TextColor3 = UITheme.Colors.TextMuted
+	rollHint.Font = UITheme.FontMedium
+	rollHint.TextSize = 12
+	rollHint.Parent = rollModal
+
+	local rollList = Instance.new("Frame")
+	rollList.Size = UDim2.new(1, -30, 1, -104)
+	rollList.Position = UDim2.new(0, 15, 0, 92)
+	rollList.BackgroundTransparency = 1
+	rollList.Parent = rollModal
+
+	local rollListLayout = Instance.new("UIListLayout")
+	rollListLayout.Padding = UDim.new(0, 8)
+	rollListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	rollListLayout.Parent = rollList
+
+	type PedestalRow = {
+		frame: Frame,
+		button: TextButton,
+		status: TextLabel,
+	}
+
+	local pedestalRows: { PedestalRow } = {}
+	-- Client-side mirror of the server cooldown, used only to grey out buttons.
+	local pedestalReadyAt: { [number]: number } = {}
+
+	for pedestalIndex = 1, GameConfig.PEDESTAL_MAX do
+		local row = Instance.new("Frame")
+		row.Size = UDim2.new(1, 0, 0, 48)
+		row.BackgroundColor3 = Color3.fromRGB(42, 50, 76)
+		row.LayoutOrder = pedestalIndex
+		row.Parent = rollList
+		UITheme.addCorner(row, 12)
+		UITheme.addStroke(row, UITheme.Colors.BorderOutline, 1.5)
+
+		local nameLbl = Instance.new("TextLabel")
+		nameLbl.Size = UDim2.new(0.45, 0, 1, 0)
+		nameLbl.Position = UDim2.new(0, 14, 0, 0)
+		nameLbl.BackgroundTransparency = 1
+		nameLbl.Text = "Pedestal " .. pedestalIndex
+		nameLbl.TextColor3 = Color3.fromRGB(230, 240, 255)
+		nameLbl.Font = UITheme.FontBold
+		nameLbl.TextSize = 13
+		nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+		nameLbl.Parent = row
+
+		local statusLbl = Instance.new("TextLabel")
+		statusLbl.Size = UDim2.new(0.25, 0, 1, 0)
+		statusLbl.Position = UDim2.new(0.5, 0, 0, 0)
+		statusLbl.BackgroundTransparency = 1
+		statusLbl.Text = "Listo"
+		statusLbl.TextColor3 = UITheme.Colors.GreenSuccess
+		statusLbl.Font = UITheme.FontMedium
+		statusLbl.TextSize = 12
+		statusLbl.Parent = row
+
+		local rollBtn = Instance.new("TextButton")
+		rollBtn.Size = UDim2.new(0, 96, 0, 34)
+		rollBtn.Position = UDim2.new(1, -12, 0.5, 0)
+		rollBtn.AnchorPoint = Vector2.new(1, 0.5)
+		rollBtn.BackgroundColor3 = UITheme.Colors.GoldAccent
+		rollBtn.Text = "ROLL"
+		rollBtn.TextColor3 = Color3.fromRGB(40, 30, 0)
+		rollBtn.Font = UITheme.FontTitle
+		rollBtn.TextSize = 14
+		rollBtn.AutoButtonColor = false
+		rollBtn.Parent = row
+		UITheme.addCorner(rollBtn, 10)
+		UIEffects.applyButtonBounce(rollBtn)
+
+		local currentPedestalIdx = pedestalIndex
+		rollBtn.MouseButton1Click:Connect(function()
+			if os.clock() < (pedestalReadyAt[currentPedestalIdx] or 0) then
+				SoundManager.playSound("Error", 1.0, 0.5)
+				return
+			end
+			if self.onRoll then
+				-- Optimistic local cooldown; the server re-validates regardless.
+				pedestalReadyAt[currentPedestalIdx] = os.clock() + GameConfig.ROLL_COOLDOWN
+				self.onRoll(currentPedestalIdx)
+			end
+		end)
+
+		pedestalRows[pedestalIndex] = { frame = row, button = rollBtn, status = statusLbl }
+	end
+
+	-- Ticks the cooldown readouts while the roll modal is open.
+	RunService.Heartbeat:Connect(function()
+		if not rollModal.Visible then
+			return
+		end
+		local now = os.clock()
+		for pedestalIndex, row in pedestalRows do
+			if not row.frame.Visible then
+				continue
+			end
+			local readyAt = pedestalReadyAt[pedestalIndex] or 0
+			if now < readyAt then
+				row.status.Text = string.format("%.1fs", readyAt - now)
+				row.status.TextColor3 = UITheme.Colors.TextMuted
+				row.button.BackgroundColor3 = Color3.fromRGB(85, 95, 115)
+			else
+				row.status.Text = "Listo"
+				row.status.TextColor3 = UITheme.Colors.GreenSuccess
+				row.button.BackgroundColor3 = UITheme.Colors.GoldAccent
+			end
+		end
+	end)
+
+	rollDockBtn.MouseButton1Click:Connect(function()
+		switchModal(rollModal)
+	end)
+
+	-- ── 7c. MODAL: MEJORAS ────────────────────────────────────────────────────
+
+	local upgradeModal = createModalFrame("⚡ MEJORAS", 420, 330)
+
+	local upgradeContainer = Instance.new("Frame")
+	upgradeContainer.Size = UDim2.new(1, -24, 1, -68)
+	upgradeContainer.Position = UDim2.new(0, 12, 0, 58)
+	upgradeContainer.BackgroundTransparency = 1
+	upgradeContainer.Parent = upgradeModal
+
+	local upgradeLayout = Instance.new("UIListLayout")
+	upgradeLayout.Padding = UDim.new(0, 12)
+	upgradeLayout.Parent = upgradeContainer
+
+	type UpgradeCard = {
+		valueLabel: TextLabel,
+		button: TextButton,
+	}
+
+	local function createUpgradeCard(
+		upgradeId: string,
+		icon: string,
+		title: string,
+		blurb: string,
+		accent: Color3
+	): UpgradeCard
+		local card = Instance.new("Frame")
+		card.Size = UDim2.new(1, 0, 0, 96)
+		card.BackgroundColor3 = Color3.fromRGB(42, 50, 76)
+		card.Parent = upgradeContainer
+		UITheme.addCorner(card, 14)
+		UITheme.addStroke(card, accent, 2)
+
+		local iconLbl = Instance.new("TextLabel")
+		iconLbl.Size = UDim2.new(0, 40, 0, 34)
+		iconLbl.Position = UDim2.new(0, 12, 0, 8)
+		iconLbl.BackgroundTransparency = 1
+		iconLbl.Text = icon
+		iconLbl.TextSize = 22
+		iconLbl.Parent = card
+
+		local titleLbl = Instance.new("TextLabel")
+		titleLbl.Size = UDim2.new(0.6, 0, 0, 24)
+		titleLbl.Position = UDim2.new(0, 52, 0, 10)
+		titleLbl.BackgroundTransparency = 1
+		titleLbl.Text = title
+		titleLbl.TextColor3 = Color3.fromRGB(235, 245, 255)
+		titleLbl.Font = UITheme.FontTitle
+		titleLbl.TextSize = 14
+		titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+		titleLbl.Parent = card
+
+		local blurbLbl = Instance.new("TextLabel")
+		blurbLbl.Size = UDim2.new(1, -64, 0, 18)
+		blurbLbl.Position = UDim2.new(0, 52, 0, 32)
+		blurbLbl.BackgroundTransparency = 1
+		blurbLbl.Text = blurb
+		blurbLbl.TextColor3 = UITheme.Colors.TextMuted
+		blurbLbl.Font = UITheme.FontMedium
+		blurbLbl.TextSize = 11
+		blurbLbl.TextXAlignment = Enum.TextXAlignment.Left
+		blurbLbl.Parent = card
+
+		local valueLbl = Instance.new("TextLabel")
+		valueLbl.Size = UDim2.new(0.5, 0, 0, 28)
+		valueLbl.Position = UDim2.new(0, 14, 1, -34)
+		valueLbl.BackgroundTransparency = 1
+		valueLbl.Text = "—"
+		valueLbl.TextColor3 = UITheme.Colors.GoldAccent
+		valueLbl.Font = UITheme.FontTitle
+		valueLbl.TextSize = 15
+		valueLbl.TextXAlignment = Enum.TextXAlignment.Left
+		valueLbl.Parent = card
+
+		local buyBtn = Instance.new("TextButton")
+		buyBtn.Size = UDim2.new(0, 150, 0, 32)
+		buyBtn.Position = UDim2.new(1, -14, 1, -18)
+		buyBtn.AnchorPoint = Vector2.new(1, 1)
+		buyBtn.BackgroundColor3 = accent
+		buyBtn.Text = "COMPRAR"
+		buyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		buyBtn.Font = UITheme.FontTitle
+		buyBtn.TextSize = 12
+		buyBtn.AutoButtonColor = false
+		buyBtn.Parent = card
+		UITheme.addCorner(buyBtn, 10)
+		UIEffects.applyButtonBounce(buyBtn)
+
+		buyBtn.MouseButton1Click:Connect(function()
+			if self.onBuyUpgrade then
+				self.onBuyUpgrade(upgradeId)
+			end
+		end)
+
+		return { valueLabel = valueLbl, button = buyBtn }
+	end
+
+	local luckCard = createUpgradeCard(
+		"oreLuck",
+		"⛏️",
+		"ORE LUCK",
+		"Más suerte = más rarezas altas al rollear.",
+		Color3.fromRGB(60, 150, 255)
+	)
+
+	local pedestalCard = createUpgradeCard(
+		"pedestals",
+		"🎰",
+		"ROLLING PEDESTALS",
+		"Más pedestales = más rolls en simultáneo.",
+		Color3.fromRGB(240, 150, 40)
+	)
+
+	upgradeDockBtn.MouseButton1Click:Connect(function()
+		switchModal(upgradeModal)
+	end)
+
 	-- Forward declaration: referenced by the empty-slot click handler below,
 	-- assigned once section 9 builds the inventory modal.
 	local invModal: Frame
@@ -537,9 +822,11 @@ function HUD.create(player: Player): HUDInstance
 	plotGridContainer.BackgroundTransparency = 1
 	plotGridContainer.Parent = plotModal
 
+	-- 5 columns × 4 rows covers PLOT_MAX_SIZE; rows beyond the player's unlocked
+	-- pot count render as locked placeholders.
 	local plotGridLayout = Instance.new("UIGridLayout")
-	plotGridLayout.CellSize = UDim2.new(0.184, 0, 0.46, 0)
-	plotGridLayout.CellPadding = UDim2.new(0.02, 0, 0.06, 0)
+	plotGridLayout.CellSize = UDim2.new(0.184, 0, 0.22, 0)
+	plotGridLayout.CellPadding = UDim2.new(0.02, 0, 0.026, 0)
 	plotGridLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	plotGridLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 	plotGridLayout.Parent = plotGridContainer
@@ -589,6 +876,18 @@ function HUD.create(player: Player): HUDInstance
 
 		local currentIdx = slotIdx
 		slotCard.MouseButton1Click:Connect(function()
+			if currentIdx > currentMaxPots then
+				SoundManager.playSound("Error", 1.0, 0.5)
+				UIEffects.spawnFloatingText(
+					screen,
+					string.format("Maceta bloqueada · rebirth %d", GameConfig.REBIRTHS_PER_UNLOCK * math.ceil((currentIdx - GameConfig.PLOT_BASE_SIZE) / GameConfig.POTS_PER_UNLOCK)),
+					UDim2.new(0.5, 0, 0.5, 0),
+					UITheme.Colors.RedDanger,
+					20
+				)
+				return
+			end
+
 			local slot = currentData.plot[currentIdx]
 			if slot and type(slot) == "table" then
 				if self.onRemovePlant then
@@ -879,6 +1178,16 @@ function HUD.create(player: Player): HUDInstance
 		end
 	end
 
+	-- Roll pedestal: spin first, then hand off to the same reveal card the egg
+	-- gacha uses. The plant argument is already the server's final answer.
+	local rollUI = RollAnimation.create(screen)
+
+	self.showRollResult = function(plant: Plant, duration: number)
+		rollUI.play(plant, duration, function(revealed: Plant)
+			self.showGachaReveal(revealed)
+		end)
+	end
+
 	-- ── 12. MÉTODOS DE ACTUALIZACIÓN DEL ESTADO ────────────────────────────────
 
 	self.updateCoins = function(coins: number, income: number)
@@ -894,19 +1203,70 @@ function HUD.create(player: Player): HUDInstance
 			or Color3.fromRGB(75, 85, 105)
 	end
 
-	self.updateFull = function(data: PlayerData & { incomePerSecond: number? })
+	self.updateFull = function(data: FullState)
 		currentData = data
+		currentMaxPots = data.maxPots or GameConfig.getMaxPots(data.rebirths or 0)
 		self.updateCoins(data.coins, data.incomePerSecond or 0)
 
-		-- Actualizar Slots del Jardín
+		local luck = data.oreLuck or GameConfig.LUCK_START
+		local ownedPedestals = data.pedestals or GameConfig.PEDESTAL_START
+
+		refreshOdds(luck)
+
+		-- ── Mejoras ──
+		if luck >= GameConfig.LUCK_MAX then
+			luckCard.valueLabel.Text = string.format("%dx · MÁXIMO", luck)
+			luckCard.button.Text = "MÁXIMO"
+			luckCard.button.BackgroundColor3 = Color3.fromRGB(85, 95, 115)
+		else
+			local cost = data.luckCost or GameConfig.getLuckCost(luck)
+			luckCard.valueLabel.Text = string.format("%dx → %dx", luck, luck + GameConfig.LUCK_STEP)
+			luckCard.button.Text = NumberFormat.formatMoney(cost)
+			luckCard.button.BackgroundColor3 = data.coins >= cost
+				and Color3.fromRGB(60, 150, 255)
+				or Color3.fromRGB(85, 95, 115)
+		end
+
+		if ownedPedestals >= GameConfig.PEDESTAL_MAX then
+			pedestalCard.valueLabel.Text = string.format("%d · MÁXIMO", ownedPedestals)
+			pedestalCard.button.Text = "MÁXIMO"
+			pedestalCard.button.BackgroundColor3 = Color3.fromRGB(85, 95, 115)
+		else
+			local cost = data.pedestalCost or GameConfig.getPedestalCost(ownedPedestals)
+			pedestalCard.valueLabel.Text = string.format("%d → %d", ownedPedestals, ownedPedestals + 1)
+			pedestalCard.button.Text = NumberFormat.formatMoney(cost)
+			pedestalCard.button.BackgroundColor3 = data.coins >= cost
+				and Color3.fromRGB(240, 150, 40)
+				or Color3.fromRGB(85, 95, 115)
+		end
+
+		-- ── Pedestales de roll ──
+		for pedestalIndex, row in pedestalRows do
+			row.frame.Visible = pedestalIndex <= ownedPedestals
+		end
+
+		-- ── Slots del Jardín ──
 		local occupiedCount = 0
 		for i = 1, GameConfig.PLOT_SIZE do
-			local slot = data.plot[i]
 			local card = plotSlotCards[i]
 			local iconLbl = card:FindFirstChild("Icon") :: TextLabel
 			local nameLbl = card:FindFirstChild("FruitName") :: TextLabel
 			local subLbl = card:FindFirstChild("SubInfo") :: TextLabel
 
+			if i > currentMaxPots then
+				-- Locked: shown so the player can see the progression ahead.
+				local unlockAt = GameConfig.REBIRTHS_PER_UNLOCK
+					* math.ceil((i - GameConfig.PLOT_BASE_SIZE) / GameConfig.POTS_PER_UNLOCK)
+				card.BackgroundColor3 = Color3.fromRGB(28, 33, 48)
+				iconLbl.Text = "🔒"
+				nameLbl.Text = "Bloqueada"
+				nameLbl.TextColor3 = Color3.fromRGB(130, 145, 170)
+				subLbl.Text = string.format("Rebirth %d", unlockAt)
+				subLbl.TextColor3 = Color3.fromRGB(130, 145, 170)
+				continue
+			end
+
+			local slot = data.plot[i]
 			if slot and type(slot) == "table" then
 				occupiedCount += 1
 				local style = UITheme.getRarityStyle(slot.rarityId)
@@ -929,7 +1289,7 @@ function HUD.create(player: Player): HUDInstance
 			end
 		end
 
-		statPlantedVal.Text = string.format("%d / %d", occupiedCount, GameConfig.PLOT_SIZE)
+		statPlantedVal.Text = string.format("%d / %d", occupiedCount, currentMaxPots)
 		statBackpackVal.Text = tostring(#data.plants)
 		invCountLabel.Text = string.format("Frutas: %d", #data.plants)
 
@@ -993,7 +1353,7 @@ function HUD.create(player: Player): HUDInstance
 
 			local currentInventoryIdx = idx
 			plantBtn.MouseButton1Click:Connect(function()
-				for s = 1, GameConfig.PLOT_SIZE do
+				for s = 1, currentMaxPots do
 					local slot = data.plot[s]
 					if not slot or slot == false then
 						if self.onPlacePlant then

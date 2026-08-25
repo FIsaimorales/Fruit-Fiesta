@@ -27,6 +27,9 @@ local openEgg = remotes:WaitForChild("OpenEgg") :: RemoteEvent
 local placePlant = remotes:WaitForChild("PlacePlant") :: RemoteEvent
 local removePlant = remotes:WaitForChild("RemovePlant") :: RemoteEvent
 local autoEquipBest = remotes:WaitForChild("AutoEquipBest") :: RemoteEvent
+local rollResult = remotes:WaitForChild("RollResult") :: RemoteEvent
+local requestRoll = remotes:WaitForChild("RequestRoll") :: RemoteEvent
+local buyUpgrade = remotes:WaitForChild("BuyUpgrade") :: RemoteEvent
 
 -- ── Init Modern HUD ───────────────────────────────────────────────────────────
 
@@ -49,6 +52,14 @@ hud.onAutoEquip = function()
 	autoEquipBest:FireServer()
 end
 
+hud.onRoll = function(pedestalIndex: number)
+	requestRoll:FireServer(pedestalIndex)
+end
+
+hud.onBuyUpgrade = function(upgradeId: string)
+	buyUpgrade:FireServer(upgradeId)
+end
+
 -- ── Receive server state ──────────────────────────────────────────────────────
 
 -- Full player state update (on join, inventory changes, egg open, plot change)
@@ -66,4 +77,13 @@ eggOpened.OnClientEvent:Connect(function(plant: Plant)
 	hud.showGachaReveal(plant)
 end)
 
-print("[Client] Fruit Fiesta Modern HUD & Audio Manager initialized successfully.")
+-- Roll pedestal: the server already decided the outcome, the payload just tells
+-- us what it is and how long to spin the slot machine before showing it.
+rollResult.OnClientEvent:Connect(function(payload)
+	if typeof(payload) ~= "table" or typeof(payload.plant) ~= "table" then
+		return
+	end
+	hud.showRollResult(payload.plant, payload.duration or 2.5)
+end)
+
+print("[Client] Fruit Fiesta HUD, roll pedestals & upgrades initialized.")

@@ -12,10 +12,13 @@ local IncomeService = {}
 local updatePlayerRemote: RemoteEvent
 local updateCoinsRemote: RemoteEvent
 
--- Calculates total coins/s for a player's current plot
+-- Calculates total coins/s for a player's current plot. Only pots the player
+-- has actually unlocked count, so a rebirth rollback can never keep paying out.
 function IncomeService.calcIncome(data: PlayerData): number
+	local maxPots = GameConfig.getMaxPots(data.rebirths or 0)
 	local total = 0
-	for _, slot in data.plot do
+	for i = 1, maxPots do
+		local slot = data.plot[i]
 		if slot and type(slot) == "table" then
 			total += GameConfig.getIncome(slot.speciesName, slot.rarityId)
 		end
@@ -59,12 +62,22 @@ function IncomeService.pushUpdate(player: Player)
 	end
 
 	local income = IncomeService.calcIncome(data)
+	local oreLuck = data.oreLuck or GameConfig.LUCK_START
+	local pedestals = data.pedestals or GameConfig.PEDESTAL_START
+
 	updatePlayerRemote:FireClient(player, {
 		coins = data.coins,
 		plants = data.plants,
 		plot = data.plot,
 		rebirths = data.rebirths,
 		incomePerSecond = income,
+
+		oreLuck = oreLuck,
+		pedestals = pedestals,
+		maxPots = GameConfig.getMaxPots(data.rebirths or 0),
+		nextPotUnlock = GameConfig.getNextPotUnlock(data.rebirths or 0),
+		luckCost = oreLuck < GameConfig.LUCK_MAX and GameConfig.getLuckCost(oreLuck) or nil,
+		pedestalCost = pedestals < GameConfig.PEDESTAL_MAX and GameConfig.getPedestalCost(pedestals) or nil,
 	})
 end
 
