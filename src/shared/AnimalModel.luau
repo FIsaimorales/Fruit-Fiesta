@@ -1,5 +1,5 @@
 --!strict
--- Low-poly plant builder: a simple stem with a geometric fruit on top.
+-- Low-poly animal builder: a simple stem with a geometric fruit on top.
 --
 -- Everything here is generated from primitives (Part shapes + solid colors, no
 -- textures, no meshes, no external assets), which keeps the generic Roblox
@@ -8,9 +8,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Shared.GameConfig)
 
-export type Plant = GameConfig.Plant
+export type Animal = GameConfig.Animal
 
-local PlantModel = {}
+local AnimalModel = {}
 
 export type FruitVisual = {
 	color: Color3,
@@ -49,8 +49,8 @@ local LEAF_COLOR = Color3.fromRGB(96, 170, 78)
 local SOIL_COLOR = Color3.fromRGB(74, 54, 40)
 local POT_COLOR = Color3.fromRGB(168, 96, 62)
 
-function PlantModel.getVisual(speciesName: string): FruitVisual
-	return FRUIT_VISUALS[speciesName] or DEFAULT_VISUAL
+function AnimalModel.getVisual(animalSpecies: string): FruitVisual
+	return FRUIT_VISUALS[animalSpecies] or DEFAULT_VISUAL
 end
 
 local function makePart(name: string, size: Vector3, color: Color3, parent: Instance): Part
@@ -69,9 +69,9 @@ local function makePart(name: string, size: Vector3, color: Color3, parent: Inst
 	return part
 end
 
--- Builds the empty pot that sits in a plot slot. `slotIndex` is stamped on the
--- model so the plot can find and refill it later.
-function PlantModel.buildPot(slotIndex: number): Model
+-- Builds the empty pot that sits in a farm slot. `slotIndex` is stamped on the
+-- model so the farm can find and refill it later.
+function AnimalModel.buildPot(slotIndex: number): Model
 	local pot = Instance.new("Model")
 	pot.Name = "Pot" .. slotIndex
 	pot:SetAttribute("SlotIndex", slotIndex)
@@ -95,16 +95,16 @@ function PlantModel.buildPot(slotIndex: number): Model
 	return pot
 end
 
--- Builds the plant itself: stem, two leaves, and the fruit on top.
+-- Builds the animal itself: stem, two leaves, and the fruit on top.
 -- The model's PrimaryPart sits at the base, so pivoting it to a pot's soil
--- surface plants it correctly.
-function PlantModel.build(plant: Plant): Model
-	local visual = PlantModel.getVisual(plant.speciesName)
+-- surface places it correctly.
+function AnimalModel.build(animal: Animal): Model
+	local visual = AnimalModel.getVisual(animal.animalSpecies)
 
 	local model = Instance.new("Model")
-	model.Name = plant.speciesName
-	model:SetAttribute("SpeciesName", plant.speciesName)
-	model:SetAttribute("RarityId", plant.rarityId)
+	model.Name = animal.animalSpecies
+	model:SetAttribute("AnimalSpecies", animal.animalSpecies)
+	model:SetAttribute("RarityId", animal.rarityId)
 
 	-- Invisible anchor at ground level: everything is positioned relative to it.
 	local root = makePart("Root", Vector3.new(0.2, 0.2, 0.2), STEM_COLOR, model)
@@ -129,12 +129,12 @@ function PlantModel.build(plant: Plant): Model
 	fruit.CFrame = CFrame.new(0, stemHeight + visual.size.Y * 0.42, 0)
 		* CFrame.Angles(0, math.rad(visual.tilt or 0), math.rad(visual.tilt or 0))
 
-	-- Rare plants get a coloured glow so a good plot reads at a distance.
-	if plant.rarityId >= 4 then
+	-- Rare animals get a coloured glow so a good farm reads at a distance.
+	if animal.rarityId >= 4 then
 		local light = Instance.new("PointLight")
 		light.Color = visual.color
-		light.Brightness = plant.rarityId >= 6 and 2.5 or 1.4
-		light.Range = plant.rarityId >= 6 and 12 or 8
+		light.Brightness = animal.rarityId >= 6 and 2.5 or 1.4
+		light.Range = animal.rarityId >= 6 and 12 or 8
 		light.Parent = fruit
 	end
 
@@ -142,4 +142,4 @@ function PlantModel.build(plant: Plant): Model
 	return model
 end
 
-return PlantModel
+return AnimalModel

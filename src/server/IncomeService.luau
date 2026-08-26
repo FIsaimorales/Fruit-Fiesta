@@ -10,17 +10,17 @@ export type PlayerData = GameConfig.PlayerData
 local IncomeService = {}
 
 local updatePlayerRemote: RemoteEvent
-local updateCoinsRemote: RemoteEvent
+local updateMoneyRemote: RemoteEvent
 
--- Calculates total coins/s for a player's current plot. Only pots the player
+-- Calculates total money/s for a player's current farm. Only pots the player
 -- has actually unlocked count, so a rebirth rollback can never keep paying out.
 function IncomeService.calcIncome(data: PlayerData): number
 	local maxPots = GameConfig.getMaxPots(data.rebirths or 0)
 	local total = 0
 	for i = 1, maxPots do
-		local slot = data.plot[i]
+		local slot = data.farm[i]
 		if slot and type(slot) == "table" then
-			total += GameConfig.getIncome(slot.speciesName, slot.rarityId)
+			total += GameConfig.getIncome(slot.animalSpecies, slot.rarityId)
 		end
 	end
 	return total
@@ -28,8 +28,8 @@ end
 
 function IncomeService.init(remotes: Folder)
 	updatePlayerRemote = remotes:WaitForChild("UpdatePlayerData", 10) :: RemoteEvent
-	updateCoinsRemote = remotes:WaitForChild("UpdateCoins", 10) :: RemoteEvent
-	if not updatePlayerRemote or not updateCoinsRemote then
+	updateMoneyRemote = remotes:WaitForChild("UpdateMoney", 10) :: RemoteEvent
+	if not updatePlayerRemote or not updateMoneyRemote then
 		error("[IncomeService] No se encontraron los RemoteEvents necesarios en Remotes.")
 	end
 
@@ -44,17 +44,17 @@ function IncomeService.init(remotes: Folder)
 
 				local income = IncomeService.calcIncome(data)
 				if income > 0 then
-					data.coins += income
+					data.money += income
 				end
 
 				-- Enviar únicamente actualización ligera de monedas e income/s (optimización de red)
-				updateCoinsRemote:FireClient(player, data.coins, income)
+				updateMoneyRemote:FireClient(player, data.money, income)
 			end
 		end
 	end)
 end
 
--- Called when a player's plot/inventory changes mid-tick or upon initial load
+-- Called when a player's farm/inventory changes mid-tick or upon initial load
 function IncomeService.pushUpdate(player: Player)
 	local data = DataManager.get(player)
 	if not data then
@@ -66,9 +66,9 @@ function IncomeService.pushUpdate(player: Player)
 	local pedestals = data.pedestals or GameConfig.PEDESTAL_START
 
 	updatePlayerRemote:FireClient(player, {
-		coins = data.coins,
-		plants = data.plants,
-		plot = data.plot,
+		money = data.money,
+		animals = data.animals,
+		farm = data.farm,
 		rebirths = data.rebirths,
 		incomePerSecond = income,
 

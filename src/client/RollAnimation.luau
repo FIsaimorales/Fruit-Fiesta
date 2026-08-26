@@ -13,7 +13,7 @@ local UITheme = require(script.Parent.UITheme)
 local UIEffects = require(script.Parent.UIEffects)
 local SoundManager = require(script.Parent.SoundManager)
 
-export type Plant = GameConfig.Plant
+export type Animal = GameConfig.Animal
 
 local RollAnimation = {}
 
@@ -39,7 +39,7 @@ local function randomTeaser(): (string, Color3)
 end
 
 export type RollUI = {
-	play: (plant: Plant, duration: number, onReveal: (Plant) -> ()) -> (),
+	play: (animal: Animal, duration: number, onReveal: (Animal) -> ()) -> (),
 }
 
 -- Builds the reusable spin overlay inside a ScreenGui.
@@ -112,7 +112,7 @@ function RollAnimation.create(screen: ScreenGui): RollUI
 
 	local spinning = false
 
-	local function play(plant: Plant, duration: number, onReveal: (Plant) -> ())
+	local function play(animal: Animal, duration: number, onReveal: (Animal) -> ())
 		if spinning then
 			return
 		end
@@ -145,19 +145,19 @@ function RollAnimation.create(screen: ScreenGui): RollUI
 			end
 
 			-- Reveal the result the server picked before any of this started.
-			local style = UITheme.getRarityStyle(plant.rarityId)
-			reelIcon.Text = UITheme.getSpeciesIcon(plant.speciesName)
+			local style = UITheme.getRarityStyle(animal.rarityId)
+			reelIcon.Text = UITheme.getSpeciesIcon(animal.animalSpecies)
 			reelIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
 			cardStroke.Color = style.strokeColor
 			header.Text = "✨ ¡RESULTADO!"
-			statusLabel.Text = plant.speciesName
+			statusLabel.Text = animal.animalSpecies
 
 			UIEffects.shakeObject(card, 0.22, 5)
 			task.wait(0.45)
 
 			overlay.Visible = false
 			spinning = false
-			onReveal(plant)
+			onReveal(animal)
 		end)
 	end
 

@@ -1,8 +1,8 @@
 --!strict
--- Leases one of the six plots to each player and keeps its world visuals in
+-- Leases one of the six farms to each player and keeps its world visuals in
 -- sync with that player's data.
 --
--- All geometry lives in ReplicatedStorage.Shared.PlotLayout so the Studio scene
+-- All geometry lives in ReplicatedStorage.Shared.FarmLayout so the Studio scene
 -- draft and the live server build an identical world; this module only adds
 -- ownership, prompts and refresh logic on top.
 local Players = game:GetService("Players")
@@ -10,29 +10,29 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local GameConfig = require(ReplicatedStorage.Shared.GameConfig)
-local PlantModel = require(ReplicatedStorage.Shared.PlantModel)
-local PlotLayout = require(ReplicatedStorage.Shared.PlotLayout)
+local AnimalModel = require(ReplicatedStorage.Shared.AnimalModel)
+local FarmLayout = require(ReplicatedStorage.Shared.FarmLayout)
 local DataManager = require(script.Parent.DataManager)
 local RollService = require(script.Parent.RollService)
 local UpgradeService = require(script.Parent.UpgradeService)
 
-export type Plant = GameConfig.Plant
+export type Animal = GameConfig.Animal
 
-local PlotService = {}
+local FarmService = {}
 
-PlotService.PLOT_COUNT = PlotLayout.PLOT_COUNT
+FarmService.FARM_COUNT = FarmLayout.FARM_COUNT
 
--- plotIndex → Model, and userId → plotIndex
-local plots: { [number]: Model } = {}
+-- farmIndex → Model, and userId → farmIndex
+local farms: { [number]: Model } = {}
 local ownership: { [number]: number } = {}
 
-local function getPlotOf(player: Player): Model?
-	local plotIndex = ownership[player.UserId]
-	return plotIndex and plots[plotIndex] or nil
+local function getFarmOf(player: Player): Model?
+	local farmIndex = ownership[player.UserId]
+	return farmIndex and farms[farmIndex] or nil
 end
 
-local function ownerOf(plot: Model): Player?
-	local userId = plot:GetAttribute("OwnerUserId")
+local function ownerOf(farm: Model): Player?
+	local userId = farm:GetAttribute("OwnerUserId")
 	if type(userId) ~= "number" then
 		return nil
 	end
@@ -56,11 +56,11 @@ end
 
 -- ── Refresh ───────────────────────────────────────────────────────────────────
 
--- Repaints one plot from its owner's current data: pot visibility, planted
+-- Repaints one farm from its owner's current data: pot visibility, planted
 -- models, pedestal availability and upgrade pricing.
-function PlotService.refresh(player: Player)
-	local plot = getPlotOf(player)
-	if not plot then
+function FarmService.refresh(player: Player)
+	local farm = getFarmOf(player)
+	if not farm then
 		return
 	end
 
@@ -73,9 +73,9 @@ function PlotService.refresh(player: Player)
 	local ownedPedestals = math.clamp(data.pedestals or GameConfig.PEDESTAL_START, 1, GameConfig.PEDESTAL_MAX)
 
 	-- Pots + planted models
-	local pots = plot:FindFirstChild("Pots")
+	local pots = farm:FindFirstChild("Pots")
 	if pots then
-		for slotIndex = 1, GameConfig.PLOT_MAX_SIZE do
+		for slotIndex = 1, GameConfig.FARM_MAX_SIZE do
 			local pot = pots:FindFirstChild("Pot" .. slotIndex) :: Model?
 			if not pot then
 				continue
@@ -89,25 +89,25 @@ function PlotService.refresh(player: Player)
 				end
 			end
 
-			local existingPlant = pot:FindFirstChild("Plant")
-			if existingPlant then
-				existingPlant:Destroy()
+			local existingAnimal = pot:FindFirstChild("Animal")
+			if existingAnimal then
+				existingAnimal:Destroy()
 			end
 
-			local slot = data.plot[slotIndex]
+			local slot = data.farm[slotIndex]
 			if unlocked and slot and type(slot) == "table" then
-				local plant = PlantModel.build(slot)
-				plant.Name = "Plant"
+				local animal = AnimalModel.build(slot)
+				animal.Name = "Animal"
 				-- Soil surface sits ~2 studs above the pot base.
-				plant:PivotTo(pot:GetPivot() * CFrame.new(0, 2, 0))
-				plant.Parent = pot
+				animal:PivotTo(pot:GetPivot() * CFrame.new(0, 2, 0))
+				animal.Parent = pot
 			end
 		end
 	end
 
 	-- Pedestals: hide the ones this player has not bought yet.
 	for pedestalIndex = 1, GameConfig.PEDESTAL_MAX do
-		local pedestal = plot:FindFirstChild("Pedestal" .. pedestalIndex) :: Model?
+		local pedestal = farm:FindFirstChild("Pedestal" .. pedestalIndex) :: Model?
 		if not pedestal then
 			continue
 		end
@@ -135,7 +135,7 @@ function PlotService.refresh(player: Player)
 
 	-- Upgrade signage
 	local luck = data.oreLuck or GameConfig.LUCK_START
-	local luckLabel = findLabel(plot:FindFirstChild("Upgrade_oreLuck"), "Pad", "InfoGui")
+	local luckLabel = findLabel(farm:FindFirstChild("Upgrade_oreLuck"), "Pad", "InfoGui")
 	if luckLabel then
 		if luck >= GameConfig.LUCK_MAX then
 			luckLabel.Text = string.format("⛏️ ORE LUCK\n%dx · MÁXIMO", luck)
@@ -149,7 +149,7 @@ function PlotService.refresh(player: Player)
 		end
 	end
 
-	local pedestalLabel = findLabel(plot:FindFirstChild("Upgrade_pedestals"), "Pad", "InfoGui")
+	local pedestalLabel = findLabel(farm:FindFirstChild("Upgrade_pedestals"), "Pad", "InfoGui")
 	if pedestalLabel then
 		if ownedPedestals >= GameConfig.PEDESTAL_MAX then
 			pedestalLabel.Text = string.format("🎰 PEDESTALES\n%d · MÁXIMO", ownedPedestals)
@@ -164,94 +164,94 @@ function PlotService.refresh(player: Player)
 	end
 
 	-- Owner sign
-	local ownerLabel = findLabel(plot, "SignBoard", "OwnerGui")
+	local ownerLabel = findLabel(farm, "SignBoard", "OwnerGui")
 	if ownerLabel then
-		ownerLabel.Text = string.format("%s\n%d/%d macetas", player.DisplayName, maxPots, GameConfig.PLOT_MAX_SIZE)
+		ownerLabel.Text = string.format("%s\n%d/%d macetas", player.DisplayName, maxPots, GameConfig.FARM_MAX_SIZE)
 	end
 end
 
 -- ── Ownership ─────────────────────────────────────────────────────────────────
 
-local function resetPlotVisuals(plotIndex: number)
-	local plot = plots[plotIndex]
-	if not plot then
+local function resetFarmVisuals(farmIndex: number)
+	local farm = farms[farmIndex]
+	if not farm then
 		return
 	end
 
-	plot:SetAttribute("OwnerUserId", nil)
+	farm:SetAttribute("OwnerUserId", nil)
 
-	local border = plot:FindFirstChild("Border") :: BasePart?
+	local border = farm:FindFirstChild("Border") :: BasePart?
 	if border then
-		border.Color = PlotLayout.UNCLAIMED_COLOR
+		border.Color = FarmLayout.UNCLAIMED_COLOR
 	end
 
-	local pots = plot:FindFirstChild("Pots")
+	local pots = farm:FindFirstChild("Pots")
 	if pots then
 		for _, pot in pots:GetChildren() do
-			local plant = pot:FindFirstChild("Plant")
-			if plant then
-				plant:Destroy()
+			local animal = pot:FindFirstChild("Animal")
+			if animal then
+				animal:Destroy()
 			end
 		end
 	end
 
-	local ownerLabel = findLabel(plot, "SignBoard", "OwnerGui")
+	local ownerLabel = findLabel(farm, "SignBoard", "OwnerGui")
 	if ownerLabel then
-		ownerLabel.Text = "Parcela " .. plotIndex .. "\nLibre"
+		ownerLabel.Text = "Parcela " .. farmIndex .. "\nLibre"
 	end
 end
 
--- Leases the first free plot to a player. Returns the plot index, or nil when
+-- Leases the first free farm to a player. Returns the farm index, or nil when
 -- the server is somehow over capacity.
-function PlotService.assign(player: Player): number?
+function FarmService.assign(player: Player): number?
 	local existing = ownership[player.UserId]
 	if existing then
 		return existing
 	end
 
-	for plotIndex = 1, PlotLayout.PLOT_COUNT do
-		local plot = plots[plotIndex]
-		if plot and plot:GetAttribute("OwnerUserId") == nil then
-			plot:SetAttribute("OwnerUserId", player.UserId)
-			ownership[player.UserId] = plotIndex
+	for farmIndex = 1, FarmLayout.FARM_COUNT do
+		local farm = farms[farmIndex]
+		if farm and farm:GetAttribute("OwnerUserId") == nil then
+			farm:SetAttribute("OwnerUserId", player.UserId)
+			ownership[player.UserId] = farmIndex
 
-			local border = plot:FindFirstChild("Border") :: BasePart?
+			local border = farm:FindFirstChild("Border") :: BasePart?
 			if border then
-				border.Color = PlotLayout.CLAIMED_COLOR
+				border.Color = FarmLayout.CLAIMED_COLOR
 			end
 
-			-- Drop the player at the front of their own plot.
+			-- Drop the player at the front of their own farm.
 			local character = player.Character
 			if character then
 				local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 				if root then
-					root.CFrame = PlotLayout.getPlotOrigin(plotIndex)
-						* CFrame.new(0, 5, PlotLayout.PLOT_DEPTH / 2 - 6)
+					root.CFrame = FarmLayout.getFarmOrigin(farmIndex)
+						* CFrame.new(0, 5, FarmLayout.FARM_DEPTH / 2 - 6)
 				end
 			end
 
-			PlotService.refresh(player)
-			return plotIndex
+			FarmService.refresh(player)
+			return farmIndex
 		end
 	end
 
-	warn("[PlotService] No hay parcelas libres para " .. player.Name)
+	warn("[FarmService] No hay parcelas libres para " .. player.Name)
 	return nil
 end
 
-function PlotService.release(player: Player)
-	local plotIndex = ownership[player.UserId]
-	if not plotIndex then
+function FarmService.release(player: Player)
+	local farmIndex = ownership[player.UserId]
+	if not farmIndex then
 		return
 	end
 	ownership[player.UserId] = nil
-	resetPlotVisuals(plotIndex)
+	resetFarmVisuals(farmIndex)
 end
 
 -- ── Wiring ────────────────────────────────────────────────────────────────────
 
-local function wirePrompts(plot: Model)
-	for _, descendant in plot:GetDescendants() do
+local function wirePrompts(farm: Model)
+	for _, descendant in farm:GetDescendants() do
 		if not descendant:IsA("ProximityPrompt") then
 			continue
 		end
@@ -265,8 +265,8 @@ local function wirePrompts(plot: Model)
 		if descendant.Name == "RollPrompt" then
 			local pedestalIndex = model:GetAttribute("PedestalIndex")
 			descendant.Triggered:Connect(function(triggerPlayer: Player)
-				-- Only the plot's owner may use its pedestals.
-				if plot:GetAttribute("OwnerUserId") ~= triggerPlayer.UserId then
+				-- Only the farm's owner may use its pedestals.
+				if farm:GetAttribute("OwnerUserId") ~= triggerPlayer.UserId then
 					return
 				end
 				RollService.requestRoll(triggerPlayer, pedestalIndex)
@@ -274,7 +274,7 @@ local function wirePrompts(plot: Model)
 		elseif descendant.Name == "BuyPrompt" then
 			local upgradeId = model:GetAttribute("UpgradeId")
 			descendant.Triggered:Connect(function(triggerPlayer: Player)
-				if plot:GetAttribute("OwnerUserId") ~= triggerPlayer.UserId then
+				if farm:GetAttribute("OwnerUserId") ~= triggerPlayer.UserId then
 					return
 				end
 				UpgradeService.buy(triggerPlayer, upgradeId)
@@ -288,14 +288,14 @@ local function startCooldownDisplay()
 	task.spawn(function()
 		while true do
 			task.wait(0.25)
-			for _, plot in plots do
-				local player = ownerOf(plot)
+			for _, farm in farms do
+				local player = ownerOf(farm)
 				if not player then
 					continue
 				end
 
 				for pedestalIndex = 1, GameConfig.PEDESTAL_MAX do
-					local pedestal = plot:FindFirstChild("Pedestal" .. pedestalIndex) :: Model?
+					local pedestal = farm:FindFirstChild("Pedestal" .. pedestalIndex) :: Model?
 					if not pedestal then
 						continue
 					end
@@ -329,36 +329,36 @@ local function startCooldownDisplay()
 	end)
 end
 
-function PlotService.init()
-	-- Reuse the plots already in the scene (the Studio draft); build them only
+function FarmService.init()
+	-- Reuse the farms already in the scene (the Studio draft); build them only
 	-- if the place has none.
-	local folder = Workspace:FindFirstChild("Plots")
+	local folder = Workspace:FindFirstChild("Farms")
 	if not folder then
-		folder = PlotLayout.buildAll(Workspace)
+		folder = FarmLayout.buildAll(Workspace)
 	end
 
-	for plotIndex = 1, PlotLayout.PLOT_COUNT do
-		local plot = folder:FindFirstChild("Plot" .. plotIndex) :: Model?
-		if plot then
-			plots[plotIndex] = plot
-			plot:SetAttribute("OwnerUserId", nil)
-			wirePrompts(plot)
+	for farmIndex = 1, FarmLayout.FARM_COUNT do
+		local farm = folder:FindFirstChild("Farm" .. farmIndex) :: Model?
+		if farm then
+			farms[farmIndex] = farm
+			farm:SetAttribute("OwnerUserId", nil)
+			wirePrompts(farm)
 		end
 	end
 
 	Players.PlayerRemoving:Connect(function(player: Player)
-		PlotService.release(player)
+		FarmService.release(player)
 	end)
 
 	-- Keep the world in sync with data changes driven by rolls and upgrades.
 	RollService.Rolled.Event:Connect(function(player: Player)
-		PlotService.refresh(player)
+		FarmService.refresh(player)
 	end)
 	UpgradeService.Purchased.Event:Connect(function(player: Player)
-		PlotService.refresh(player)
+		FarmService.refresh(player)
 	end)
 
 	startCooldownDisplay()
 end
 
-return PlotService
+return FarmService

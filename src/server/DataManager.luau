@@ -6,7 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GameConfig = require(ReplicatedStorage.Shared.GameConfig)
 
 export type PlayerData = GameConfig.PlayerData
-export type Plant = GameConfig.Plant
+export type Animal = GameConfig.Animal
 
 local DataManager = {}
 
@@ -15,24 +15,24 @@ local store = DataStoreService:GetDataStore(GameConfig.DATASTORE_NAME)
 -- In-memory cache: userId → data table
 local cache: { [number]: PlayerData } = {}
 
--- Create a fresh default data table with starter coins and plant
+-- Create a fresh default data table with starter money and animal
 local function createDefaultData(): PlayerData
-	local initialPlot: { Plant | boolean } = {}
-	for i = 1, GameConfig.PLOT_SIZE do
-		if i == 1 and GameConfig.STARTING_PLANT then
-			initialPlot[i] = {
-				speciesName = GameConfig.STARTING_PLANT.speciesName,
-				rarityId = GameConfig.STARTING_PLANT.rarityId,
+	local initialFarm: { Animal | boolean } = {}
+	for i = 1, GameConfig.FARM_SIZE do
+		if i == 1 and GameConfig.STARTING_ANIMAL then
+			initialFarm[i] = {
+				animalSpecies = GameConfig.STARTING_ANIMAL.animalSpecies,
+				rarityId = GameConfig.STARTING_ANIMAL.rarityId,
 			}
 		else
-			initialPlot[i] = false -- false = empty slot (serializable in JSON)
+			initialFarm[i] = false -- false = empty slot (serializable in JSON)
 		end
 	end
 
 	return {
-		coins = GameConfig.STARTING_COINS or 150,
-		plants = {},
-		plot = initialPlot,
+		money = GameConfig.STARTING_MONEY or 150,
+		animals = {},
+		farm = initialFarm,
 		rebirths = 0,
 		oreLuck = GameConfig.LUCK_START,
 		pedestals = GameConfig.PEDESTAL_START,
@@ -42,10 +42,10 @@ end
 -- Clamps stored values back into legal ranges. Protects against fields that
 -- predate an upgrade being added, and against corrupt/tampered saves.
 local function normalize(data: PlayerData)
-	if type(data.coins) ~= "number" or data.coins ~= data.coins then
-		data.coins = GameConfig.STARTING_COINS
+	if type(data.money) ~= "number" or data.money ~= data.money then
+		data.money = GameConfig.STARTING_MONEY
 	end
-	data.coins = math.max(math.floor(data.coins), 0)
+	data.money = math.max(math.floor(data.money), 0)
 
 	if type(data.rebirths) ~= "number" then
 		data.rebirths = 0
@@ -62,11 +62,11 @@ local function normalize(data: PlayerData)
 	end
 	data.pedestals = math.clamp(math.floor(data.pedestals), GameConfig.PEDESTAL_START, GameConfig.PEDESTAL_MAX)
 
-	if type(data.plants) ~= "table" then
-		data.plants = {}
+	if type(data.animals) ~= "table" then
+		data.animals = {}
 	end
-	if type(data.plot) ~= "table" then
-		data.plot = {}
+	if type(data.farm) ~= "table" then
+		data.farm = {}
 	end
 end
 
@@ -125,10 +125,10 @@ function DataManager.load(player: Player): PlayerData?
 
 	normalize(data)
 
-	-- Asegurar que el array del plot tenga la longitud correcta
-	for i = 1, GameConfig.PLOT_SIZE do
-		if data.plot[i] == nil then
-			data.plot[i] = false
+	-- Asegurar que el array del farm tenga la longitud correcta
+	for i = 1, GameConfig.FARM_SIZE do
+		if data.farm[i] == nil then
+			data.farm[i] = false
 		end
 	end
 

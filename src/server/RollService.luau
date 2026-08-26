@@ -11,13 +11,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GameConfig = require(ReplicatedStorage.Shared.GameConfig)
 local DataManager = require(script.Parent.DataManager)
 
-export type Plant = GameConfig.Plant
+export type Animal = GameConfig.Animal
 export type PlayerData = GameConfig.PlayerData
 
 local RollService = {}
 
--- Fired as (player, plant, pedestalIndex) so world-side visuals (the physical
--- pedestal in the plot) can react to a roll without reaching into this module.
+-- Fired as (player, animal, pedestalIndex) so world-side visuals (the physical
+-- pedestal in the farm) can react to a roll without reaching into this module.
 RollService.Rolled = Instance.new("BindableEvent")
 
 local rollResultRemote: RemoteEvent
@@ -50,15 +50,15 @@ local function rollRarity(luck: number): number
 	return 1
 end
 
--- Rolls a full plant (rarity first, then a species eligible for that rarity).
-function RollService.rollPlant(luck: number): Plant
+-- Rolls a full animal (rarity first, then a species eligible for that rarity).
+function RollService.rollAnimal(luck: number): Animal
 	local rarityId = rollRarity(luck)
 	local eligible = GameConfig.getSpeciesForRarity(rarityId)
 	if #eligible == 0 then
-		return { speciesName = GameConfig.SPECIES[1].name, rarityId = 1 }
+		return { animalSpecies = GameConfig.SPECIES[1].name, rarityId = 1 }
 	end
 	local species = eligible[rng:NextInteger(1, #eligible)]
-	return { speciesName = species.name, rarityId = rarityId }
+	return { animalSpecies = species.name, rarityId = rarityId }
 end
 
 -- Seconds left before this pedestal can roll again (0 when ready).
@@ -102,17 +102,17 @@ function RollService.requestRoll(player: Player, pedestalIndex: any): boolean
 	end
 	playerCooldowns[pedestalIndex] = os.clock()
 
-	local plant = RollService.rollPlant(data.oreLuck or GameConfig.LUCK_START)
-	table.insert(data.plants, plant)
+	local animal = RollService.rollAnimal(data.oreLuck or GameConfig.LUCK_START)
+	table.insert(data.animals, animal)
 
 	-- Tell the owner what they got plus how long to spin before revealing it.
 	rollResultRemote:FireClient(player, {
-		plant = plant,
+		animal = animal,
 		pedestalIndex = pedestalIndex,
 		duration = GameConfig.ROLL_ANIM_DURATION,
 	})
 
-	RollService.Rolled:Fire(player, plant, pedestalIndex)
+	RollService.Rolled:Fire(player, animal, pedestalIndex)
 	return true
 end
 

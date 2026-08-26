@@ -21,7 +21,7 @@ export type PurchaseResult = {
 }
 
 -- Ore Luck: +1x per purchase, cost grows geometrically. Higher luck bends the
--- rarity curve in GameConfig.getRarityWeights toward rarer plants.
+-- rarity curve in GameConfig.getRarityWeights toward rarer animals.
 function UpgradeService.buyLuck(player: Player): PurchaseResult
 	local data = DataManager.get(player)
 	if not data then
@@ -34,11 +34,11 @@ function UpgradeService.buyLuck(player: Player): PurchaseResult
 	end
 
 	local cost = GameConfig.getLuckCost(current)
-	if data.coins < cost then
-		return { ok = false, reason = "insufficient_coins", newValue = current, nextCost = cost }
+	if data.money < cost then
+		return { ok = false, reason = "insufficient_money", newValue = current, nextCost = cost }
 	end
 
-	data.coins -= cost
+	data.money -= cost
 	data.oreLuck = current + GameConfig.LUCK_STEP
 
 	UpgradeService.Purchased:Fire(player, "oreLuck", data.oreLuck)
@@ -50,7 +50,7 @@ function UpgradeService.buyLuck(player: Player): PurchaseResult
 end
 
 -- Rolling Pedestals: each purchase adds one independently-recharging pedestal
--- to the player's plot, up to GameConfig.PEDESTAL_MAX.
+-- to the player's farm, up to GameConfig.PEDESTAL_MAX.
 function UpgradeService.buyPedestal(player: Player): PurchaseResult
 	local data = DataManager.get(player)
 	if not data then
@@ -63,11 +63,11 @@ function UpgradeService.buyPedestal(player: Player): PurchaseResult
 	end
 
 	local cost = GameConfig.getPedestalCost(current)
-	if data.coins < cost then
-		return { ok = false, reason = "insufficient_coins", newValue = current, nextCost = cost }
+	if data.money < cost then
+		return { ok = false, reason = "insufficient_money", newValue = current, nextCost = cost }
 	end
 
-	data.coins -= cost
+	data.money -= cost
 	data.pedestals = current + 1
 
 	UpgradeService.Purchased:Fire(player, "pedestals", data.pedestals)

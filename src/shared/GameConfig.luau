@@ -14,22 +14,22 @@ export type Species = {
 	fixedRarity: number?,
 }
 
-export type Plant = {
-	speciesName: string,
+export type Animal = {
+	animalSpecies: string,
 	rarityId: number,
 }
 
 export type PlayerData = {
-	coins: number,
-	plants: { Plant },
-	plot: { Plant | boolean },
+	money: number,
+	animals: { Animal },
+	farm: { Animal | boolean },
 	rebirths: number,
 	oreLuck: number,
 	pedestals: number,
 }
 
 -- Rarities ordered from lowest to highest
--- income/s per plant = baseValue * species.multiplier
+-- income/s per animal = baseValue * species.multiplier
 GameConfig.RARITIES = {
 	{ name = "Común",        id = 1, baseValue = 10 },
 	{ name = "Poco común",   id = 2, baseValue = 18 },
@@ -56,20 +56,20 @@ GameConfig.SPECIES = {
 	{ name = "Fruta Cósmica",    minRarity = 6, multiplier = 4.0, fixedRarity = 6 },
 } :: { Species }
 
--- ── Plot capacity ─────────────────────────────────────────────────────────────
--- Pots start at PLOT_BASE_SIZE and unlock in jumps every REBIRTHS_PER_UNLOCK
+-- ── Farm capacity ─────────────────────────────────────────────────────────────
+-- Pots start at FARM_BASE_SIZE and unlock in jumps every REBIRTHS_PER_UNLOCK
 -- rebirths (rebirth 5 → 12, 10 → 14, 15 → 16, 20 → 18, 25 → 20, capped).
-GameConfig.PLOT_BASE_SIZE = 10
-GameConfig.PLOT_MAX_SIZE = 20
+GameConfig.FARM_BASE_SIZE = 10
+GameConfig.FARM_MAX_SIZE = 20
 GameConfig.POTS_PER_UNLOCK = 2
 GameConfig.REBIRTHS_PER_UNLOCK = 5
 
--- Absolute slot count every plot array / UI grid is allocated for.
-GameConfig.PLOT_SIZE = GameConfig.PLOT_MAX_SIZE
+-- Absolute slot count every farm array / UI grid is allocated for.
+GameConfig.FARM_SIZE = GameConfig.FARM_MAX_SIZE
 
 -- Starting economy parameters (prevents new player deadlock)
-GameConfig.STARTING_COINS = 150
-GameConfig.STARTING_PLANT = { speciesName = "Manzana", rarityId = 1 }
+GameConfig.STARTING_MONEY = 150
+GameConfig.STARTING_ANIMAL = { animalSpecies = "Manzana", rarityId = 1 }
 
 -- Egg gacha settings
 GameConfig.EGG_COST = 100
@@ -105,15 +105,15 @@ GameConfig.LUCK_RARITY_EXPONENT = 0.35
 GameConfig.INCOME_TICK_RATE = 1
 
 -- DataStore key prefix
-GameConfig.DATASTORE_NAME = "FruitGardenV1"
+GameConfig.DATASTORE_NAME = "GranjaFantasticaV1"
 
--- Returns the income per second for a given speciesName + rarityId
-function GameConfig.getIncome(speciesName: string, rarityId: number): number
+-- Returns the income per second for a given animalSpecies + rarityId
+function GameConfig.getIncome(animalSpecies: string, rarityId: number): number
 	local rarity = GameConfig.RARITIES[rarityId]
 	if not rarity then return 0 end
 
 	for _, species in GameConfig.SPECIES do
-		if species.name == speciesName then
+		if species.name == animalSpecies then
 			return math.round(rarity.baseValue * species.multiplier)
 		end
 	end
@@ -156,18 +156,18 @@ function GameConfig.getSpeciesForRarity(rarityId: number): { Species }
 	return valid
 end
 
--- ── Plot capacity ─────────────────────────────────────────────────────────────
+-- ── Farm capacity ─────────────────────────────────────────────────────────────
 
 -- How many pots this player has unlocked at their current rebirth count.
 function GameConfig.getMaxPots(rebirths: number): number
 	local unlocks = math.floor(math.max(rebirths, 0) / GameConfig.REBIRTHS_PER_UNLOCK)
-	local pots = GameConfig.PLOT_BASE_SIZE + unlocks * GameConfig.POTS_PER_UNLOCK
-	return math.min(pots, GameConfig.PLOT_MAX_SIZE)
+	local pots = GameConfig.FARM_BASE_SIZE + unlocks * GameConfig.POTS_PER_UNLOCK
+	return math.min(pots, GameConfig.FARM_MAX_SIZE)
 end
 
 -- Rebirth count at which the next pot unlock lands, or nil once capped.
 function GameConfig.getNextPotUnlock(rebirths: number): number?
-	if GameConfig.getMaxPots(rebirths) >= GameConfig.PLOT_MAX_SIZE then
+	if GameConfig.getMaxPots(rebirths) >= GameConfig.FARM_MAX_SIZE then
 		return nil
 	end
 	local unlocks = math.floor(math.max(rebirths, 0) / GameConfig.REBIRTHS_PER_UNLOCK)

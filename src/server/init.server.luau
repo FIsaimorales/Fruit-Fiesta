@@ -6,10 +6,10 @@ local DataManager = require(script.DataManager)
 local IncomeService = require(script.IncomeService)
 local RollService = require(script.RollService)
 local UpgradeService = require(script.UpgradeService)
-local PlotService = require(script.PlotService)
+local FarmService = require(script.FarmService)
 local GameConfig = require(ReplicatedStorage.Shared.GameConfig)
 
-export type Plant = GameConfig.Plant
+export type Animal = GameConfig.Animal
 
 -- Create or retrieve RemoteEvents folder in ReplicatedStorage
 local remotes = ReplicatedStorage:FindFirstChild("Remotes") :: Folder
@@ -33,8 +33,8 @@ end
 -- Server → Client: push full player state
 local _updatePlayerData = getOrCreateRemote("UpdatePlayerData")
 
--- Server → Client: lightweight tick update for coins & income/s
-local _updateCoins = getOrCreateRemote("UpdateCoins")
+-- Server → Client: lightweight tick update for money & income/s
+local _updateMoney = getOrCreateRemote("UpdateMoney")
 
 -- Server → Client: notify egg gacha reveal result
 local eggOpened = getOrCreateRemote("EggOpened")
@@ -42,13 +42,13 @@ local eggOpened = getOrCreateRemote("EggOpened")
 -- Client → Server: open an egg
 local openEgg = getOrCreateRemote("OpenEgg")
 
--- Client → Server: place a plant from inventory into a plot slot
-local placePlant = getOrCreateRemote("PlacePlant")
+-- Client → Server: place a animal from inventory into a farm slot
+local placeAnimal = getOrCreateRemote("PlaceAnimal")
 
--- Client → Server: remove plant from plot slot back to inventory
-local removePlant = getOrCreateRemote("RemovePlant")
+-- Client → Server: remove animal from farm slot back to inventory
+local removeAnimal = getOrCreateRemote("RemoveAnimal")
 
--- Client → Server: auto equip best plants
+-- Client → Server: auto equip best animals
 local autoEquipBest = getOrCreateRemote("AutoEquipBest")
 
 -- Server → Client: roll outcome (already decided) + how long to spin for
@@ -73,11 +73,11 @@ local function checkRateLimit(player: Player, minDelay: number): boolean
 	return true
 end
 
--- Pushes state to the owning client and repaints their physical plot. Every
+-- Pushes state to the owning client and repaints their physical farm. Every
 -- mutation below funnels through this so HUD and world never disagree.
 local function syncPlayer(player: Player)
 	IncomeService.pushUpdate(player)
-	PlotService.refresh(player)
+	FarmService.refresh(player)
 end
 
 -- ── Egg gacha logic (rarity rolled first according to EGG_WEIGHTS) ─────────────
@@ -116,25 +116,25 @@ openEgg.OnServerEvent:Connect(function(player: Player)
 	if not data then
 		return
 	end
-	if data.coins < GameConfig.EGG_COST then
+	if data.money < GameConfig.EGG_COST then
 		return
 	end
 
-	data.coins -= GameConfig.EGG_COST
+	data.money -= GameConfig.EGG_COST
 
-	local speciesName, rarityId = rollEgg()
-	local newPlant: Plant = { speciesName = speciesName, rarityId = rarityId }
-	table.insert(data.plants, newPlant)
+	local animalSpecies, rarityId = rollEgg()
+	local newAnimal: Animal = { animalSpecies = animalSpecies, rarityId = rarityId }
+	table.insert(data.animals, newAnimal)
 
 	-- Notify client to play the gacha reveal cinematic
-	eggOpened:FireClient(player, newPlant)
+	eggOpened:FireClient(player, newAnimal)
 
 	syncPlayer(player)
 end)
 
--- ── Plot management ───────────────────────────────────────────────────────────
+-- ── Farm management ───────────────────────────────────────────────────────────
 
-placePlant.OnServerEvent:Connect(function(player: Player, inventoryIndex: any, slotIndex: any)
+placeAnimal.OnServerEvent:Connect(function(player: Player, inventoryIndex: any, slotIndex: any)
 	if not checkRateLimit(player, 0.05) then
 		return
 	end
@@ -156,26 +156,26 @@ placePlant.OnServerEvent:Connect(function(player: Player, inventoryIndex: any, s
 	if slotIndex < 1 or slotIndex > GameConfig.getMaxPots(data.rebirths or 0) then
 		return
 	end
-	if inventoryIndex < 1 or inventoryIndex > #data.plants then
+	if inventoryIndex < 1 or inventoryIndex > #data.animals then
 		return
 	end
 
 	-- Ensure target slot is empty
-	local currentSlot = data.plot[slotIndex]
+	local currentSlot = data.farm[slotIndex]
 	if currentSlot and currentSlot ~= false then
 		return
 	end
 
-	local plant = table.remove(data.plants, inventoryIndex)
-	if not plant then
+	local animal = table.remove(data.animals, inventoryIndex)
+	if not animal then
 		return
 	end
 
-	data.plot[slotIndex] = plant
+	data.farm[slotIndex] = animal
 	syncPlayer(player)
 end)
 
-removePlant.OnServerEvent:Connect(function(player: Player, slotIndex: any)
+removeAnimal.OnServerEvent:Connect(function(player: Player, slotIndex: any)
 	if not checkRateLimit(player, 0.05) then
 		return
 	end
@@ -190,22 +190,22 @@ removePlant.OnServerEvent:Connect(function(player: Player, slotIndex: any)
 		return
 	end
 
-	if slotIndex < 1 or slotIndex > GameConfig.PLOT_SIZE then
+	if slotIndex < 1 or slotIndex > GameConfig.FARM_SIZE then
 		return
 	end
 
-	local slot = data.plot[slotIndex]
+	local slot = data.farm[slotIndex]
 	if not slot or slot == false or type(slot) ~= "table" then
 		return
 	end
 
-	data.plot[slotIndex] = false
-	table.insert(data.plants, slot)
+	data.farm[slotIndex] = false
+	table.insert(data.animals, slot)
 
 	syncPlayer(player)
 end)
 
--- Auto equip best plants into the plot
+-- Auto equip best animals into the farm
 autoEquipBest.OnServerEvent:Connect(function(player: Player)
 	if not checkRateLimit(player, 0.2) then
 		return
@@ -216,53 +216,53 @@ autoEquipBest.OnServerEvent:Connect(function(player: Player)
 		return
 	end
 
-	-- Collect all plants
-	local allPlants: { Plant } = {}
-	for _, slot in data.plot do
+	-- Collect all animals
+	local allAnimals: { Animal } = {}
+	for _, slot in data.farm do
 		if slot and type(slot) == "table" then
-			table.insert(allPlants, slot)
+			table.insert(allAnimals, slot)
 		end
 	end
-	for _, plant in data.plants do
-		table.insert(allPlants, plant)
+	for _, animal in data.animals do
+		table.insert(allAnimals, animal)
 	end
 
 	-- Sort by income descending
-	table.sort(allPlants, function(a, b)
-		local incomeA = GameConfig.getIncome(a.speciesName, a.rarityId)
-		local incomeB = GameConfig.getIncome(b.speciesName, b.rarityId)
+	table.sort(allAnimals, function(a, b)
+		local incomeA = GameConfig.getIncome(a.animalSpecies, a.rarityId)
+		local incomeB = GameConfig.getIncome(b.animalSpecies, b.rarityId)
 		if incomeA == incomeB then
 			return a.rarityId > b.rarityId
 		end
 		return incomeA > incomeB
 	end)
 
-	-- Fill unlocked pots with the best plants; the rest go back to the backpack
+	-- Fill unlocked pots with the best animals; the rest go back to the backpack
 	local capacity = GameConfig.getMaxPots(data.rebirths or 0)
-	local newPlot: { Plant | boolean } = {}
-	local newPlants: { Plant } = {}
+	local newFarm: { Animal | boolean } = {}
+	local newAnimalsBackpack: { Animal } = {}
 
-	for i = 1, GameConfig.PLOT_SIZE do
-		if i <= capacity and allPlants[i] then
-			newPlot[i] = allPlants[i]
+	for i = 1, GameConfig.FARM_SIZE do
+		if i <= capacity and allAnimals[i] then
+			newFarm[i] = allAnimals[i]
 		else
-			newPlot[i] = false
+			newFarm[i] = false
 		end
 	end
 
-	for i = capacity + 1, #allPlants do
-		table.insert(newPlants, allPlants[i])
+	for i = capacity + 1, #allAnimals do
+		table.insert(newAnimalsBackpack, allAnimals[i])
 	end
 
-	data.plot = newPlot
-	data.plants = newPlants
+	data.farm = newFarm
+	data.animals = newAnimalsBackpack
 
 	syncPlayer(player)
 end)
 
 -- ── Roll pedestals ────────────────────────────────────────────────────────────
 
--- The pedestal itself is a ProximityPrompt handled by PlotService; this remote
+-- The pedestal itself is a ProximityPrompt handled by FarmService; this remote
 -- is the HUD's equivalent button. Both funnel into the same validated path.
 requestRoll.OnServerEvent:Connect(function(player: Player, pedestalIndex: any)
 	if not checkRateLimit(player, 0.1) then
@@ -283,7 +283,7 @@ buyUpgrade.OnServerEvent:Connect(function(player: Player, upgradeId: any)
 	UpgradeService.buy(player, upgradeId)
 end)
 
--- Roll and upgrade both mutate coins/inventory, so refresh the client after.
+-- Roll and upgrade both mutate money/inventory, so refresh the client after.
 RollService.Rolled.Event:Connect(function(player: Player)
 	IncomeService.pushUpdate(player)
 end)
@@ -300,7 +300,7 @@ local function setupPlayer(player: Player)
 		return
 	end
 
-	PlotService.assign(player)
+	FarmService.assign(player)
 	IncomeService.pushUpdate(player)
 end
 
@@ -313,10 +313,10 @@ end)
 -- Must run before any setupPlayer call: pushUpdate fires the remotes these set up.
 IncomeService.init(remotes)
 RollService.init(remotes)
-PlotService.init()
+FarmService.init()
 
 for _, player in Players:GetPlayers() do
 	task.spawn(setupPlayer, player)
 end
 
-print("[Server] FruitGarden initialized: roll pedestals, upgrades & 2x3 plot grid.")
+print("[Server] Granja Fantástica initialized: roll pedestals, upgrades & 2x3 farm grid.")

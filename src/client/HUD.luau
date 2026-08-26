@@ -12,7 +12,7 @@ local UIEffects = require(script.Parent.UIEffects)
 local SoundManager = require(script.Parent.SoundManager)
 local RollAnimation = require(script.Parent.RollAnimation)
 
-export type Plant = GameConfig.Plant
+export type Animal = GameConfig.Animal
 export type PlayerData = GameConfig.PlayerData
 
 -- Everything the server sends on a full state push.
@@ -26,15 +26,15 @@ export type FullState = PlayerData & {
 
 export type HUDInstance = {
 	onOpenEgg: (() -> ())?,
-	onPlacePlant: ((inventoryIndex: number, slotIndex: number) -> ())?,
-	onRemovePlant: ((slotIndex: number) -> ())?,
+	onPlaceAnimal: ((inventoryIndex: number, slotIndex: number) -> ())?,
+	onRemoveAnimal: ((slotIndex: number) -> ())?,
 	onAutoEquip: (() -> ())?,
 	onRoll: ((pedestalIndex: number) -> ())?,
 	onBuyUpgrade: ((upgradeId: string) -> ())?,
 	updateFull: (data: FullState) -> (),
-	updateCoins: (coins: number, income: number) -> (),
-	showGachaReveal: (plant: Plant) -> (),
-	showRollResult: (plant: Plant, duration: number) -> (),
+	updateMoney: (money: number, income: number) -> (),
+	showGachaReveal: (animal: Animal) -> (),
+	showRollResult: (animal: Animal, duration: number) -> (),
 }
 
 local HUD = {}
@@ -42,13 +42,13 @@ local HUD = {}
 function HUD.create(player: Player): HUDInstance
 	local self: HUDInstance = {
 		onOpenEgg = nil,
-		onPlacePlant = nil,
-		onRemovePlant = nil,
+		onPlaceAnimal = nil,
+		onRemoveAnimal = nil,
 		onAutoEquip = nil,
 		onRoll = nil,
 		onBuyUpgrade = nil,
 		updateFull = function() end,
-		updateCoins = function() end,
+		updateMoney = function() end,
 		showGachaReveal = function() end,
 		showRollResult = function() end,
 	}
@@ -56,13 +56,13 @@ function HUD.create(player: Player): HUDInstance
 	local playerGui = player:WaitForChild("PlayerGui") :: PlayerGui
 
 	-- Limpiar instancias previas
-	local existing = playerGui:FindFirstChild("FruitGardenHUD")
+	local existing = playerGui:FindFirstChild("FarmHUD")
 	if existing then
 		existing:Destroy()
 	end
 
 	local screen = Instance.new("ScreenGui")
-	screen.Name = "FruitGardenHUD"
+	screen.Name = "FarmHUD"
 	screen.ResetOnSpawn = false
 	screen.IgnoreGuiInset = true
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling -- Garantiza renderizado jerárquico limpio
@@ -70,13 +70,13 @@ function HUD.create(player: Player): HUDInstance
 	screen.Parent = playerGui
 
 	-- Variables de estado
-	local currentCoins = 0
+	local currentMoney = 0
 	local currentIncome = 0
-	local currentMaxPots = GameConfig.PLOT_BASE_SIZE
+	local currentMaxPots = GameConfig.FARM_BASE_SIZE
 	local currentData: FullState = {
-		coins = 0,
-		plants = {},
-		plot = {},
+		money = 0,
+		animals = {},
+		farm = {},
 		rebirths = 0,
 		oreLuck = GameConfig.LUCK_START,
 		pedestals = GameConfig.PEDESTAL_START,
@@ -109,16 +109,16 @@ function HUD.create(player: Player): HUDInstance
 	coinIcon.ImageColor3 = Color3.fromRGB(255, 220, 60)
 	coinIcon.Parent = coinPill
 
-	local coinsLabel = Instance.new("TextLabel")
-	coinsLabel.Size = UDim2.new(0.5, 0, 0.5, 0)
-	coinsLabel.Position = UDim2.new(0, 54, 0.12, 0)
-	coinsLabel.BackgroundTransparency = 1
-	coinsLabel.Text = "$0"
-	coinsLabel.TextColor3 = UITheme.Colors.GoldAccent
-	coinsLabel.Font = UITheme.FontTitle
-	coinsLabel.TextSize = 22
-	coinsLabel.TextXAlignment = Enum.TextXAlignment.Left
-	coinsLabel.Parent = coinPill
+	local moneyLabel = Instance.new("TextLabel")
+	moneyLabel.Size = UDim2.new(0.5, 0, 0.5, 0)
+	moneyLabel.Position = UDim2.new(0, 54, 0.12, 0)
+	moneyLabel.BackgroundTransparency = 1
+	moneyLabel.Text = "$0"
+	moneyLabel.TextColor3 = UITheme.Colors.GoldAccent
+	moneyLabel.Font = UITheme.FontTitle
+	moneyLabel.TextSize = 22
+	moneyLabel.TextXAlignment = Enum.TextXAlignment.Left
+	moneyLabel.Parent = coinPill
 
 	-- Insignia de Ingresos por segundo (+$X/s)
 	local incomeBadge = Instance.new("Frame")
@@ -249,7 +249,7 @@ function HUD.create(player: Player): HUDInstance
 
 	local rollDockBtn = createDockButton(UITheme.ICONS.Sparkle, "ROLL", Color3.fromRGB(255, 225, 90), Color3.fromRGB(225, 160, 20), Color3.fromRGB(170, 110, 10))
 	local eggDockBtn = createDockButton(UITheme.ICONS.Egg, "HUEVOS", Color3.fromRGB(255, 175, 45), Color3.fromRGB(205, 105, 15), Color3.fromRGB(155, 75, 10))
-	local plotDockBtn = createDockButton(UITheme.ICONS.Plant, "JARDÍN", Color3.fromRGB(75, 225, 95), Color3.fromRGB(30, 145, 50), Color3.fromRGB(18, 95, 32))
+	local plotDockBtn = createDockButton(UITheme.ICONS.Animal, "JARDÍN", Color3.fromRGB(75, 225, 95), Color3.fromRGB(30, 145, 50), Color3.fromRGB(18, 95, 32))
 	local invDockBtn = createDockButton(UITheme.ICONS.Backpack, "MOCHILA", Color3.fromRGB(85, 165, 255), Color3.fromRGB(35, 95, 215), Color3.fromRGB(18, 58, 145))
 	local upgradeDockBtn = createDockButton(UITheme.ICONS.Bolt, "MEJORAS", Color3.fromRGB(120, 220, 255), Color3.fromRGB(35, 140, 220), Color3.fromRGB(18, 85, 150))
 	local statsDockBtn = createDockButton(UITheme.ICONS.Trophy, "STATS", Color3.fromRGB(215, 105, 255), Color3.fromRGB(135, 45, 205), Color3.fromRGB(90, 22, 140))
@@ -553,9 +553,9 @@ function HUD.create(player: Player): HUDInstance
 	UIEffects.applyButtonBounce(buyEggBtn)
 
 	buyEggBtn.MouseButton1Click:Connect(function()
-		if currentCoins < GameConfig.EGG_COST then
+		if currentMoney < GameConfig.EGG_COST then
 			UIEffects.playSound("Error")
-			UIEffects.spawnFloatingText(screen, "¡Monedas Insuficientes!", UDim2.new(0.5, 0, 0.5, 0), UITheme.Colors.RedDanger, 24)
+			UIEffects.spawnFloatingText(screen, "¡Dinero Insuficiente!", UDim2.new(0.5, 0, 0.5, 0), UITheme.Colors.RedDanger, 24)
 			return
 		end
 		if self.onOpenEgg then
@@ -568,7 +568,7 @@ function HUD.create(player: Player): HUDInstance
 	end)
 
 	-- ── 7b. MODAL: PEDESTALES DE ROLL ─────────────────────────────────────────
-	-- Mirrors the physical pedestals in the plot. Each row rolls one pedestal;
+	-- Mirrors the physical pedestals in the farm. Each row rolls one pedestal;
 	-- cooldowns run per pedestal, so owning more means more rolls in parallel.
 
 	local rollModal = createModalFrame("🎰 PEDESTALES DE ROLL", 420, 400)
@@ -822,7 +822,7 @@ function HUD.create(player: Player): HUDInstance
 	plotGridContainer.BackgroundTransparency = 1
 	plotGridContainer.Parent = plotModal
 
-	-- 5 columns × 4 rows covers PLOT_MAX_SIZE; rows beyond the player's unlocked
+	-- 5 columns × 4 rows covers FARM_MAX_SIZE; rows beyond the player's unlocked
 	-- pot count render as locked placeholders.
 	local plotGridLayout = Instance.new("UIGridLayout")
 	plotGridLayout.CellSize = UDim2.new(0.184, 0, 0.22, 0)
@@ -833,7 +833,7 @@ function HUD.create(player: Player): HUDInstance
 
 	local plotSlotCards: { TextButton } = {}
 
-	for slotIdx = 1, GameConfig.PLOT_SIZE do
+	for slotIdx = 1, GameConfig.FARM_SIZE do
 		local slotCard = Instance.new("TextButton")
 		slotCard.BackgroundColor3 = Color3.fromRGB(42, 50, 76)
 		slotCard.Text = ""
@@ -880,7 +880,7 @@ function HUD.create(player: Player): HUDInstance
 				SoundManager.playSound("Error", 1.0, 0.5)
 				UIEffects.spawnFloatingText(
 					screen,
-					string.format("Maceta bloqueada · rebirth %d", GameConfig.REBIRTHS_PER_UNLOCK * math.ceil((currentIdx - GameConfig.PLOT_BASE_SIZE) / GameConfig.POTS_PER_UNLOCK)),
+					string.format("Maceta bloqueada · rebirth %d", GameConfig.REBIRTHS_PER_UNLOCK * math.ceil((currentIdx - GameConfig.FARM_BASE_SIZE) / GameConfig.POTS_PER_UNLOCK)),
 					UDim2.new(0.5, 0, 0.5, 0),
 					UITheme.Colors.RedDanger,
 					20
@@ -888,10 +888,10 @@ function HUD.create(player: Player): HUDInstance
 				return
 			end
 
-			local slot = currentData.plot[currentIdx]
+			local slot = currentData.farm[currentIdx]
 			if slot and type(slot) == "table" then
-				if self.onRemovePlant then
-					self.onRemovePlant(currentIdx)
+				if self.onRemoveAnimal then
+					self.onRemoveAnimal(currentIdx)
 					SoundManager.playSound("Pop", 1.0, 0.5)
 				end
 			else
@@ -948,7 +948,7 @@ function HUD.create(player: Player): HUDInstance
 		if self.onAutoEquip then
 			self.onAutoEquip()
 			SoundManager.playSound("Fanfare", 1.2, 0.6)
-			UIEffects.spawnFloatingText(screen, "¡Mejores Frutas Plantadas!", UDim2.new(0.5, 0, 0.5, 0), UITheme.Colors.GoldAccent, 22)
+			UIEffects.spawnFloatingText(screen, "¡Mejores Animales Colocados!", UDim2.new(0.5, 0, 0.5, 0), UITheme.Colors.GoldAccent, 22)
 		end
 	end)
 
@@ -1040,9 +1040,9 @@ function HUD.create(player: Player): HUDInstance
 	end
 
 	local statIncomeVal = makeStatRow(UITheme.ICONS.Bolt, "Ingreso Total", "+$0/s")
-	local statPlantedVal = makeStatRow(UITheme.ICONS.Plant, "Frutas Plantadas", "0 / 10")
+	local statPlacedVal = makeStatRow(UITheme.ICONS.Animal, "Animales Colocados", "0 / 10")
 	local statBackpackVal = makeStatRow(UITheme.ICONS.Backpack, "Frutas en Mochila", "0")
-	local statCoinsVal = makeStatRow(UITheme.ICONS.Coin, "Monedas Actuales", "$0")
+	local statMoneyVal = makeStatRow(UITheme.ICONS.Coin, "Dinero Actual", "$0")
 
 	statsDockBtn.MouseButton1Click:Connect(function()
 		switchModal(statsModal)
@@ -1153,14 +1153,14 @@ function HUD.create(player: Player): HUDInstance
 		end)
 	end)
 
-	self.showGachaReveal = function(plant: Plant)
-		local rarity = GameConfig.getRarity(plant.rarityId)
-		local income = GameConfig.getIncome(plant.speciesName, plant.rarityId)
-		local style = UITheme.getRarityStyle(plant.rarityId)
-		local icon = UITheme.getSpeciesIcon(plant.speciesName)
+	self.showGachaReveal = function(animal: Animal)
+		local rarity = GameConfig.getRarity(animal.rarityId)
+		local income = GameConfig.getIncome(animal.animalSpecies, animal.rarityId)
+		local style = UITheme.getRarityStyle(animal.rarityId)
+		local icon = UITheme.getSpeciesIcon(animal.animalSpecies)
 
 		gachaFruitIcon.Text = icon
-		gachaFruitName.Text = plant.speciesName
+		gachaFruitName.Text = animal.animalSpecies
 		gachaRarityLabel.Text = string.upper(rarity and rarity.name or "COMÚN")
 		gachaRarityBanner.BackgroundColor3 = style.badgeColor
 		gachaStroke.Color = style.strokeColor
@@ -1171,7 +1171,7 @@ function HUD.create(player: Player): HUDInstance
 		UIEffects.openModal(gachaCard)
 		UIEffects.shakeObject(gachaCard, 0.25, 6)
 
-		if plant.rarityId >= 4 then
+		if animal.rarityId >= 4 then
 			SoundManager.playSound("Fanfare", 1.0, 0.8)
 		else
 			SoundManager.playSound("EggCrack", 1.0, 0.7)
@@ -1179,26 +1179,26 @@ function HUD.create(player: Player): HUDInstance
 	end
 
 	-- Roll pedestal: spin first, then hand off to the same reveal card the egg
-	-- gacha uses. The plant argument is already the server's final answer.
+	-- gacha uses. The animal argument is already the server's final answer.
 	local rollUI = RollAnimation.create(screen)
 
-	self.showRollResult = function(plant: Plant, duration: number)
-		rollUI.play(plant, duration, function(revealed: Plant)
+	self.showRollResult = function(animal: Animal, duration: number)
+		rollUI.play(animal, duration, function(revealed: Animal)
 			self.showGachaReveal(revealed)
 		end)
 	end
 
 	-- ── 12. MÉTODOS DE ACTUALIZACIÓN DEL ESTADO ────────────────────────────────
 
-	self.updateCoins = function(coins: number, income: number)
-		currentCoins = coins
+	self.updateMoney = function(money: number, income: number)
+		currentMoney = money
 		currentIncome = income
-		coinsLabel.Text = NumberFormat.formatMoney(coins)
+		moneyLabel.Text = NumberFormat.formatMoney(money)
 		incomeLabel.Text = NumberFormat.formatIncome(income)
-		statCoinsVal.Text = NumberFormat.formatMoney(coins)
+		statMoneyVal.Text = NumberFormat.formatMoney(money)
 		statIncomeVal.Text = NumberFormat.formatIncome(income)
 
-		buyEggBtn.BackgroundColor3 = coins >= GameConfig.EGG_COST
+		buyEggBtn.BackgroundColor3 = money >= GameConfig.EGG_COST
 			and UITheme.Colors.GreenSuccess
 			or Color3.fromRGB(75, 85, 105)
 	end
@@ -1206,7 +1206,7 @@ function HUD.create(player: Player): HUDInstance
 	self.updateFull = function(data: FullState)
 		currentData = data
 		currentMaxPots = data.maxPots or GameConfig.getMaxPots(data.rebirths or 0)
-		self.updateCoins(data.coins, data.incomePerSecond or 0)
+		self.updateMoney(data.money, data.incomePerSecond or 0)
 
 		local luck = data.oreLuck or GameConfig.LUCK_START
 		local ownedPedestals = data.pedestals or GameConfig.PEDESTAL_START
@@ -1222,7 +1222,7 @@ function HUD.create(player: Player): HUDInstance
 			local cost = data.luckCost or GameConfig.getLuckCost(luck)
 			luckCard.valueLabel.Text = string.format("%dx → %dx", luck, luck + GameConfig.LUCK_STEP)
 			luckCard.button.Text = NumberFormat.formatMoney(cost)
-			luckCard.button.BackgroundColor3 = data.coins >= cost
+			luckCard.button.BackgroundColor3 = data.money >= cost
 				and Color3.fromRGB(60, 150, 255)
 				or Color3.fromRGB(85, 95, 115)
 		end
@@ -1235,7 +1235,7 @@ function HUD.create(player: Player): HUDInstance
 			local cost = data.pedestalCost or GameConfig.getPedestalCost(ownedPedestals)
 			pedestalCard.valueLabel.Text = string.format("%d → %d", ownedPedestals, ownedPedestals + 1)
 			pedestalCard.button.Text = NumberFormat.formatMoney(cost)
-			pedestalCard.button.BackgroundColor3 = data.coins >= cost
+			pedestalCard.button.BackgroundColor3 = data.money >= cost
 				and Color3.fromRGB(240, 150, 40)
 				or Color3.fromRGB(85, 95, 115)
 		end
@@ -1247,7 +1247,7 @@ function HUD.create(player: Player): HUDInstance
 
 		-- ── Slots del Jardín ──
 		local occupiedCount = 0
-		for i = 1, GameConfig.PLOT_SIZE do
+		for i = 1, GameConfig.FARM_SIZE do
 			local card = plotSlotCards[i]
 			local iconLbl = card:FindFirstChild("Icon") :: TextLabel
 			local nameLbl = card:FindFirstChild("FruitName") :: TextLabel
@@ -1256,7 +1256,7 @@ function HUD.create(player: Player): HUDInstance
 			if i > currentMaxPots then
 				-- Locked: shown so the player can see the progression ahead.
 				local unlockAt = GameConfig.REBIRTHS_PER_UNLOCK
-					* math.ceil((i - GameConfig.PLOT_BASE_SIZE) / GameConfig.POTS_PER_UNLOCK)
+					* math.ceil((i - GameConfig.FARM_BASE_SIZE) / GameConfig.POTS_PER_UNLOCK)
 				card.BackgroundColor3 = Color3.fromRGB(28, 33, 48)
 				iconLbl.Text = "🔒"
 				nameLbl.Text = "Bloqueada"
@@ -1266,16 +1266,16 @@ function HUD.create(player: Player): HUDInstance
 				continue
 			end
 
-			local slot = data.plot[i]
+			local slot = data.farm[i]
 			if slot and type(slot) == "table" then
 				occupiedCount += 1
 				local style = UITheme.getRarityStyle(slot.rarityId)
-				local incomeVal = GameConfig.getIncome(slot.speciesName, slot.rarityId)
-				local icon = UITheme.getSpeciesIcon(slot.speciesName)
+				local incomeVal = GameConfig.getIncome(slot.animalSpecies, slot.rarityId)
+				local icon = UITheme.getSpeciesIcon(slot.animalSpecies)
 
 				card.BackgroundColor3 = style.badgeColor
 				iconLbl.Text = icon
-				nameLbl.Text = slot.speciesName
+				nameLbl.Text = slot.animalSpecies
 				nameLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
 				subLbl.Text = string.format("+$%s/s", NumberFormat.formatMoney(incomeVal):gsub("%$", ""))
 				subLbl.TextColor3 = Color3.fromRGB(255, 255, 200)
@@ -1289,9 +1289,9 @@ function HUD.create(player: Player): HUDInstance
 			end
 		end
 
-		statPlantedVal.Text = string.format("%d / %d", occupiedCount, currentMaxPots)
-		statBackpackVal.Text = tostring(#data.plants)
-		invCountLabel.Text = string.format("Frutas: %d", #data.plants)
+		statPlacedVal.Text = string.format("%d / %d", occupiedCount, currentMaxPots)
+		statBackpackVal.Text = tostring(#data.animals)
+		invCountLabel.Text = string.format("Frutas: %d", #data.animals)
 
 		-- Actualizar Lista de Mochila / Inventario
 		for _, card in inventoryCards do
@@ -1299,10 +1299,10 @@ function HUD.create(player: Player): HUDInstance
 		end
 		table.clear(inventoryCards)
 
-		for idx, plant in data.plants do
-			local style = UITheme.getRarityStyle(plant.rarityId)
-			local income = GameConfig.getIncome(plant.speciesName, plant.rarityId)
-			local icon = UITheme.getSpeciesIcon(plant.speciesName)
+		for idx, animal in data.animals do
+			local style = UITheme.getRarityStyle(animal.rarityId)
+			local income = GameConfig.getIncome(animal.animalSpecies, animal.rarityId)
+			local icon = UITheme.getSpeciesIcon(animal.animalSpecies)
 
 			local itemCard = Instance.new("Frame")
 			itemCard.BackgroundColor3 = Color3.fromRGB(38, 46, 70)
@@ -1322,7 +1322,7 @@ function HUD.create(player: Player): HUDInstance
 			itemName.Size = UDim2.new(1, -4, 0.2, 0)
 			itemName.Position = UDim2.new(0, 2, 0.44, 0)
 			itemName.BackgroundTransparency = 1
-			itemName.Text = plant.speciesName
+			itemName.Text = animal.animalSpecies
 			itemName.TextColor3 = Color3.fromRGB(255, 255, 255)
 			itemName.Font = UITheme.FontBold
 			itemName.TextSize = 11
@@ -1354,10 +1354,10 @@ function HUD.create(player: Player): HUDInstance
 			local currentInventoryIdx = idx
 			plantBtn.MouseButton1Click:Connect(function()
 				for s = 1, currentMaxPots do
-					local slot = data.plot[s]
+					local slot = data.farm[s]
 					if not slot or slot == false then
-						if self.onPlacePlant then
-							self.onPlacePlant(currentInventoryIdx, s)
+						if self.onPlaceAnimal then
+							self.onPlaceAnimal(currentInventoryIdx, s)
 							SoundManager.playSound("Pop", 1.1, 0.5)
 						end
 						return
