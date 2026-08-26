@@ -121,16 +121,16 @@ Referencia del usuario: camino tipo cinta transportadora con patrón de chevrone
 
 ## 7. Roadmap por etapas (ingeniería, paso a paso)
 
-**Todas las specs están cerradas — sin preguntas pendientes. Listo para arrancar Fase 0.**
+### ✅ Fase 0 — Fundación del pivot (renombrado) — COMPLETA
+`Plant → Animal`, `Plot → Farm`, `speciesName → animalSpecies`, `PlantModel → AnimalModel`, `PlotLayout → FarmLayout`, `PlotService → FarmService`, `coins → money`. Validado en vivo: roll, colocar, quitar, upgrades — todo probado por remotos en Studio, sin errores. Workspace limpiado de basura de templates/testing (rig leftover, decals huérfanos, SpawnLocations duplicados, ScreenGui vacío, efectos post-proceso sin usar).
 
-### Fase 0 — Fundación del pivot (renombrado)
-`Plant → Animal`, `Plot → Farm`, `speciesName → animalSpecies`, `PlantModel → AnimalModel`, `PlotLayout → FarmLayout`, `PlotService → FarmService`. Renombrar "Monedas"/"coins" → "Dinero"/"money" en UI y variables donde sea razonable. Sin lógica nueva — mantiene todo lo ya validado funcionando.
+### ✅ Fase 1 — Roster + economía base + curva de slots nueva — COMPLETA
+`GameConfig.SPECIES`: 17 animales (Pollo, Conejo, Cerdo, Oveja, Cabra, Vaca, Caballo, Llama, Oso, Búfalo, Avestruz, Pavo Real, Alpaca Dorada, Tigre Blanco, Dragón de Granja, Fénix, Unicornio — los últimos 3 con `fixedRarity=6`, exclusivos de rolls Mítico). `STARTING_ANIMAL` = Pollo. Fórmula de slots nueva confirmada por test en vivo: `rb0=10 rb1=11 ... rb20=30` (tope). Emojis de `UITheme.SPECIES_ICONS` actualizados como bonus (no bloqueante, cosmética de bajo costo). Modelos 3D siguen en placeholder — entran en Fase 5 con los diseños de Claude Design.
 
-### Fase 1 — Roster + economía base + curva de slots nueva
-`GameConfig.SPECIES` con el roster de la sección 2 (modelos placeholder hasta recibir diseños). Multiplicadores + minRarity por especie. Ajustar `EGG_WEIGHTS` si hace falta. Implementar nueva fórmula de slots: base 10, +1 por rebirth, tope 30 (sección 3).
+### ✅ Fase 2 — Mundo multijugador (4 granjas + hub) — COMPLETA
+`FarmLayout.getFarmOrigin` reescrito: 4 posiciones fijas (2 columnas separadas por el hub, 2 filas cada una), `FarmLayout.buildHub()` construye la franja central neutral (cartel "🏪 ZONA DE TIENDAS · Próximamente", sin lógica todavía). `FARM_COUNT = 4`. Cada granja mantiene sus propios pedestales/altares — sin altar compartido en el hub. Validado en vivo: 30 pots por granja, asignación/liberación correcta, mapa completo (4 granjas + hub) reconstruido persistente en Studio.
 
-### Fase 2 — Mundo multijugador (4 granjas + hub)
-`FarmLayout` con las 4 posiciones fijas del sketch (sección 6) + zona hub central neutral (solo tiendas/items de tiempo limitado). `PLOT_COUNT = 4`. Cada granja incluye su(s) propio(s) altar(es) — no hay altar compartido. Testear asignación/liberación de granjas.
+**Bug encontrado y arreglado durante el testing**: el jugador aparecía en el `SpawnLocation` compartido en vez de su granja — `player.Character` todavía no existía cuando `FarmService.assign()` corría (race condition). Arreglado con `player.CharacterAdded:Connect(...)`, que además ahora cubre respawns (morir/resetear te devuelve a tu propia granja, no al spawn compartido).
 
 ### Fase 3 — Altar reskin
 Modelo visual de altar (columna dorada + partículas) reemplazando el pedestal genérico. Cartel de probabilidades visible ("SPIN DETAILS"). Confirmar que el efecto sigue siendo 100% privado por jugador (`FireClient`, no `FireAllClients`). Sin cambio de lógica — `RollAnimation.luau` ya se comporta como se pidió.

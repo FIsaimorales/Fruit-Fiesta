@@ -201,6 +201,19 @@ local function resetFarmVisuals(farmIndex: number)
 	end
 end
 
+-- Moves a player's current character to the front of their farm. No-ops if
+-- the character isn't loaded yet — callers handle that via CharacterAdded.
+local function teleportToFarm(player: Player, farmIndex: number)
+	local character = player.Character
+	if not character then
+		return
+	end
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if root then
+		root.CFrame = FarmLayout.getFarmOrigin(farmIndex) * CFrame.new(0, 5, FarmLayout.FARM_DEPTH / 2 - 6)
+	end
+end
+
 -- Leases the first free farm to a player. Returns the farm index, or nil when
 -- the server is somehow over capacity.
 function FarmService.assign(player: Player): number?
@@ -220,15 +233,14 @@ function FarmService.assign(player: Player): number?
 				border.Color = FarmLayout.CLAIMED_COLOR
 			end
 
-			-- Drop the player at the front of their own farm.
-			local character = player.Character
-			if character then
-				local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
-				if root then
-					root.CFrame = FarmLayout.getFarmOrigin(farmIndex)
-						* CFrame.new(0, 5, FarmLayout.FARM_DEPTH / 2 - 6)
-				end
-			end
+			-- Covers every spawn from here on — the first one (character may
+			-- not exist yet when assign() runs) and every respawn after a
+			-- fall or reset, so the player always lands on their own farm
+			-- instead of the shared default SpawnLocation.
+			player.CharacterAdded:Connect(function()
+				teleportToFarm(player, farmIndex)
+			end)
+			teleportToFarm(player, farmIndex)
 
 			FarmService.refresh(player)
 			return farmIndex

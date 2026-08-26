@@ -14,15 +14,22 @@ local FarmLayout = {}
 
 -- ── Layout constants ──────────────────────────────────────────────────────────
 
-FarmLayout.FARM_COUNT = 6
+-- 4 farms in a 2x2 arrangement, split left/right by a neutral hub strip down the
+-- middle (shops, limited-time items — see buildHub). Farm 1/3 sit in the left
+-- column (1 top, 3 bottom), farm 2/4 in the right column (2 top, 4 bottom),
+-- matching the layout sketch in README.md section 6.
+FarmLayout.FARM_COUNT = 4
 FarmLayout.COLUMNS = 2
-FarmLayout.ROWS = 3
+FarmLayout.ROWS = 2
 
 FarmLayout.FARM_WIDTH = 84
 FarmLayout.FARM_DEPTH = 76
 FarmLayout.GAP_X = 16
 FarmLayout.GAP_Z = 14
 FarmLayout.FLOOR_Y = 0
+
+-- Neutral center hub (shops / limited-time items). No farm — no owner.
+FarmLayout.HUB_WIDTH = 60
 
 FarmLayout.POT_COLUMNS = 5
 FarmLayout.POT_SPACING = 11
@@ -39,17 +46,27 @@ FarmLayout.CLAIMED_COLOR = Color3.fromRGB(96, 186, 104)
 
 -- ── Positioning ───────────────────────────────────────────────────────────────
 
--- World-space center of a farm in the 2x3 grid. Farms fill left-to-right,
--- back-to-front, so the arrangement stays symmetric around the origin.
+-- World-space center of farm `farmIndex` (1-4). Farms 1/3 sit left of the hub,
+-- 2/4 sit right of it; 1/2 are the top row, 3/4 the bottom row. The hub strip's
+-- width pushes the two columns apart, keeping a clear neutral gap between them.
 function FarmLayout.getFarmOrigin(farmIndex: number): CFrame
 	local zeroBased = farmIndex - 1
-	local col = (zeroBased % FarmLayout.COLUMNS) + 1
-	local row = math.floor(zeroBased / FarmLayout.COLUMNS) + 1
+	local col = zeroBased % FarmLayout.COLUMNS -- 0 = left, 1 = right
+	local row = math.floor(zeroBased / FarmLayout.COLUMNS) -- 0 = top, 1 = bottom
 
-	local x = (col - (FarmLayout.COLUMNS + 1) / 2) * (FarmLayout.FARM_WIDTH + FarmLayout.GAP_X)
-	local z = (row - (FarmLayout.ROWS + 1) / 2) * (FarmLayout.FARM_DEPTH + FarmLayout.GAP_Z)
+	local colSign = col == 0 and -1 or 1
+	local rowSign = row == 0 and -1 or 1
+
+	local x = colSign * (FarmLayout.HUB_WIDTH / 2 + FarmLayout.GAP_X + FarmLayout.FARM_WIDTH / 2)
+	local z = rowSign * (FarmLayout.GAP_Z / 2 + FarmLayout.FARM_DEPTH / 2)
 
 	return CFrame.new(x, FarmLayout.FLOOR_Y, z)
+end
+
+-- World-space size (X, Z) of the neutral hub strip running down the middle.
+function FarmLayout.getHubSize(): Vector2
+	local depth = FarmLayout.ROWS * FarmLayout.FARM_DEPTH + (FarmLayout.ROWS - 1) * FarmLayout.GAP_Z
+	return Vector2.new(FarmLayout.HUB_WIDTH, depth)
 end
 
 -- Local offset of pot `slotIndex` (1-based) within its farm.
@@ -218,7 +235,33 @@ function FarmLayout.buildFarm(farmIndex: number): Model
 	return farm
 end
 
--- Builds all six farms under a `Farms` folder, replacing anything already there.
+-- Builds the neutral hub strip: floor + a sign marking it as the future home
+-- for shops and limited-time items. No owner, no gameplay logic — pure
+-- placeholder geometry for Fase 2; the shop system itself isn't designed yet.
+function FarmLayout.buildHub(): Model
+	local hub = Instance.new("Model")
+	hub.Name = "Hub"
+
+	local size = FarmLayout.getHubSize()
+	local floor = makePart("Floor", Vector3.new(size.X, 1, size.Y), Color3.fromRGB(150, 140, 120), hub)
+	floor.CFrame = CFrame.new(0, FarmLayout.FLOOR_Y - 0.5, 0)
+	floor.Material = Enum.Material.Cobblestone
+
+	hub.PrimaryPart = floor
+
+	local signPost = makePart("SignPost", Vector3.new(1, 8, 1), Color3.fromRGB(90, 66, 48), hub)
+	signPost.CFrame = CFrame.new(0, 4, 0)
+	local signBoard = makePart("SignBoard", Vector3.new(26, 6, 0.8), Color3.fromRGB(48, 56, 78), hub)
+	signBoard.CFrame = CFrame.new(0, 9.5, 0)
+
+	local signLabel = FarmLayout.makeBillboard(signBoard, "HubGui", 1.5, UDim2.new(0, 360, 0, 100))
+	signLabel.Text = "🏪 ZONA DE TIENDAS\n(Próximamente)"
+
+	return hub
+end
+
+-- Builds all four farms plus the neutral hub under a `Farms` folder, replacing
+-- anything already there.
 function FarmLayout.buildAll(parent: Instance): Folder
 	local existing = parent:FindFirstChild("Farms")
 	if existing then
@@ -231,6 +274,8 @@ function FarmLayout.buildAll(parent: Instance): Folder
 	for farmIndex = 1, FarmLayout.FARM_COUNT do
 		FarmLayout.buildFarm(farmIndex).Parent = folder
 	end
+
+	FarmLayout.buildHub().Parent = folder
 
 	folder.Parent = parent
 	return folder

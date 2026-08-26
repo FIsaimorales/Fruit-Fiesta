@@ -11,20 +11,27 @@ export type RarityVisual = {
 	glowColor: Color3,
 }
 
--- Emojis and visual identifiers for each fruit species
+-- Emojis and visual identifiers for each animal species. Placeholder only —
+-- once real low-poly models arrive (Fase 5/6) these stay as a lightweight
+-- 2D fallback for spots the 3D model can't reach (inventory cards, gacha reveal).
 local SPECIES_ICONS: { [string]: string } = {
-	["Manzana"] = "🍎",
-	["Banana"] = "🍌",
-	["Naranja"] = "🍊",
-	["Kiwi"] = "🥝",
-	["Piña"] = "🍍",
-	["Mango"] = "🥭",
-	["Maracuyá"] = "🍈",
-	["Dragon Fruit"] = "🐉",
-	["Durián"] = "🦔",
-	["Fruta Dorada"] = "⭐",
-	["Fruta de Cristal"] = "💎",
-	["Fruta Cósmica"] = "🌌",
+	["Pollo"] = "🐔",
+	["Conejo"] = "🐰",
+	["Cerdo"] = "🐷",
+	["Oveja"] = "🐑",
+	["Cabra"] = "🐐",
+	["Vaca"] = "🐄",
+	["Caballo"] = "🐴",
+	["Llama"] = "🦙",
+	["Oso"] = "🐻",
+	["Búfalo"] = "🐃",
+	["Avestruz"] = "🦤",
+	["Pavo Real"] = "🦚",
+	["Alpaca Dorada"] = "⭐",
+	["Tigre Blanco"] = "🐯",
+	["Dragón de Granja"] = "🐉",
+	["Fénix"] = "🔥",
+	["Unicornio"] = "🦄",
 }
 
 -- High-quality verified Roblox asset icons

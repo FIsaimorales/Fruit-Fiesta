@@ -40,36 +40,42 @@ GameConfig.RARITIES = {
 } :: { Rarity }
 
 -- minRarity: lowest rarity this species can roll
--- fixedRarity: if set, species is always this rarity (ignores egg roll)
+-- fixedRarity: if set, species is always this rarity (ignores roll rarity entirely —
+-- reserved for the three tope-tier animals, only obtainable via a Mítico roll)
 GameConfig.SPECIES = {
-	{ name = "Manzana",          minRarity = 1, multiplier = 1.0 },
-	{ name = "Banana",           minRarity = 1, multiplier = 1.0 },
-	{ name = "Naranja",          minRarity = 1, multiplier = 1.0 },
-	{ name = "Kiwi",             minRarity = 2, multiplier = 1.5 },
-	{ name = "Piña",             minRarity = 2, multiplier = 1.5 },
-	{ name = "Mango",            minRarity = 3, multiplier = 2.0 },
-	{ name = "Maracuyá",         minRarity = 3, multiplier = 2.0 },
-	{ name = "Dragon Fruit",     minRarity = 4, multiplier = 2.5 },
-	{ name = "Durián",           minRarity = 4, multiplier = 2.5 },
-	{ name = "Fruta Dorada",     minRarity = 5, multiplier = 3.0 },
-	{ name = "Fruta de Cristal", minRarity = 5, multiplier = 3.0 },
-	{ name = "Fruta Cósmica",    minRarity = 6, multiplier = 4.0, fixedRarity = 6 },
+	{ name = "Pollo",             minRarity = 1, multiplier = 1.0 },
+	{ name = "Conejo",            minRarity = 1, multiplier = 1.0 },
+	{ name = "Cerdo",             minRarity = 1, multiplier = 1.0 },
+	{ name = "Oveja",             minRarity = 2, multiplier = 1.5 },
+	{ name = "Cabra",             minRarity = 2, multiplier = 1.5 },
+	{ name = "Vaca",              minRarity = 3, multiplier = 2.0 },
+	{ name = "Caballo",           minRarity = 3, multiplier = 2.0 },
+	{ name = "Llama",             minRarity = 3, multiplier = 2.0 },
+	{ name = "Oso",               minRarity = 4, multiplier = 2.5 },
+	{ name = "Búfalo",            minRarity = 4, multiplier = 2.5 },
+	{ name = "Avestruz",          minRarity = 4, multiplier = 2.5 },
+	{ name = "Pavo Real",         minRarity = 5, multiplier = 3.0 },
+	{ name = "Alpaca Dorada",     minRarity = 5, multiplier = 3.0 },
+	{ name = "Tigre Blanco",      minRarity = 5, multiplier = 3.0 },
+	{ name = "Dragón de Granja",  minRarity = 6, multiplier = 4.0, fixedRarity = 6 },
+	{ name = "Fénix",             minRarity = 6, multiplier = 4.0, fixedRarity = 6 },
+	{ name = "Unicornio",         minRarity = 6, multiplier = 4.0, fixedRarity = 6 },
 } :: { Species }
 
 -- ── Farm capacity ─────────────────────────────────────────────────────────────
--- Pots start at FARM_BASE_SIZE and unlock in jumps every REBIRTHS_PER_UNLOCK
--- rebirths (rebirth 5 → 12, 10 → 14, 15 → 16, 20 → 18, 25 → 20, capped).
+-- Pots start at FARM_BASE_SIZE and unlock one at a time, every single rebirth
+-- (rebirth 1 → 11, rebirth 2 → 12, ... rebirth 20 → 30, capped).
 GameConfig.FARM_BASE_SIZE = 10
-GameConfig.FARM_MAX_SIZE = 20
-GameConfig.POTS_PER_UNLOCK = 2
-GameConfig.REBIRTHS_PER_UNLOCK = 5
+GameConfig.FARM_MAX_SIZE = 30
+GameConfig.POTS_PER_UNLOCK = 1
+GameConfig.REBIRTHS_PER_UNLOCK = 1
 
 -- Absolute slot count every farm array / UI grid is allocated for.
 GameConfig.FARM_SIZE = GameConfig.FARM_MAX_SIZE
 
 -- Starting economy parameters (prevents new player deadlock)
 GameConfig.STARTING_MONEY = 150
-GameConfig.STARTING_ANIMAL = { animalSpecies = "Manzana", rarityId = 1 }
+GameConfig.STARTING_ANIMAL = { animalSpecies = "Pollo", rarityId = 1 }
 
 -- Egg gacha settings
 GameConfig.EGG_COST = 100

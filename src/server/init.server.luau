@@ -319,4 +319,4 @@ for _, player in Players:GetPlayers() do
 	task.spawn(setupPlayer, player)
 end
 
-print("[Server] Granja Fantástica initialized: roll pedestals, upgrades & 2x3 farm grid.")
+print("[Server] Granja Fantástica initialized: roll pedestals, upgrades & 4-farm hub layout.")
